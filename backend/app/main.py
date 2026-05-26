@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import List
 from uuid import uuid4
 
@@ -11,6 +12,13 @@ from .storage import ensure_task_dirs, save_uploads
 from .tasks import TASK_QUEUE, task_worker
 
 app = FastAPI(title="3D Reconstruction Control Plane")
+logger = logging.getLogger("control_plane")
+logging.basicConfig(level=logging.INFO)
+
+
+@app.get("/")
+async def root() -> dict:
+    return {"status": "ok", "service": "control-plane"}
 
 
 @app.on_event("startup")
@@ -27,12 +35,19 @@ async def create_task_endpoint(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
+    if mode not in {"fast", "hq"}:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
+    if any(not file.filename for file in files):
+        raise HTTPException(status_code=400, detail="Empty filename detected")
+
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)
     save_uploads(files, dirs["inputs_dir"])
 
     task = create_task(task_id=task_id, mode=mode, image_count=len(files))
     await TASK_QUEUE.enqueue(task_id)
+    logger.info("Task queued", extra={"task_id": task_id, "mode": mode})
 
     return task
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Dict, Set
 
@@ -8,6 +9,8 @@ from fastapi import WebSocket
 
 from .db import update_task
 from .storage import ensure_task_dirs
+
+logger = logging.getLogger("control_plane")
 
 
 class TaskQueue:
@@ -43,6 +46,7 @@ async def task_worker() -> None:
     while True:
         task_id = await TASK_QUEUE.queue.get()
         try:
+            logger.info("Task started", extra={"task_id": task_id})
             update_task(task_id, status="Running")
             await TASK_QUEUE.broadcast(task_id, {"status": "Running"})
 
@@ -53,6 +57,10 @@ async def task_worker() -> None:
                     task_id,
                     {"status": "Running", "step": step, "progress": idx / len(steps)},
                 )
+                logger.info(
+                    "Task progress",
+                    extra={"task_id": task_id, "step": step, "progress": idx / len(steps)},
+                )
 
             dirs = ensure_task_dirs(task_id)
             output_path = Path(dirs["outputs_dir"]) / "placeholder.txt"
@@ -62,8 +70,10 @@ async def task_worker() -> None:
             await TASK_QUEUE.broadcast(
                 task_id, {"status": "Completed", "output_path": str(output_path)}
             )
+            logger.info("Task completed", extra={"task_id": task_id})
         except Exception as exc:
             update_task(task_id, status="Failed", error=str(exc))
             await TASK_QUEUE.broadcast(task_id, {"status": "Failed", "error": str(exc)})
+            logger.exception("Task failed", extra={"task_id": task_id})
         finally:
             TASK_QUEUE.queue.task_done()
