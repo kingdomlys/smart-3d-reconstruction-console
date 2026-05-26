@@ -7,6 +7,8 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from .db import create_task, get_task, init_db
 from .storage import ensure_task_dirs, save_uploads
@@ -17,6 +19,14 @@ logger = logging.getLogger("control_plane")
 logging.basicConfig(level=logging.INFO)
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -90,6 +100,25 @@ async def get_task_endpoint(task_id: str) -> dict:
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+@app.get("/api/tasks/{task_id}/output")
+async def get_task_output(task_id: str) -> FileResponse:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    output_path = task.get("output_path")
+    if not output_path:
+        raise HTTPException(status_code=404, detail="Output not available")
+
+    output_file = Path(output_path).resolve()
+    task_dir = ensure_task_dirs(task_id)["task_dir"].resolve()
+    if not output_file.exists() or not output_file.is_file():
+        raise HTTPException(status_code=404, detail="Output file missing")
+    if task_dir not in output_file.parents:
+        raise HTTPException(status_code=400, detail="Invalid output path")
+
+    return FileResponse(output_file, filename=output_file.name)
 
 
 @app.websocket("/ws/tasks/{task_id}")

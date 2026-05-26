@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 from pathlib import Path
 
 
@@ -24,10 +26,22 @@ def main() -> int:
         raise FileNotFoundError(f"Input dir not found: {input_dir}")
     interim_dir.mkdir(parents=True, exist_ok=True)
 
+    cmd = os.getenv("COLMAP_CMD")
     emit({"status": "Running", "step": "colmap", "progress": 0.2})
-    (interim_dir / "cameras.txt").write_text("# placeholder cameras", encoding="utf-8")
-    (interim_dir / "images.txt").write_text("# placeholder images", encoding="utf-8")
-    (interim_dir / "points3D.txt").write_text("# placeholder points", encoding="utf-8")
+    if cmd:
+        args_list = cmd.split() + ["--input-dir", str(input_dir), "--output-dir", str(interim_dir)]
+        result = subprocess.run(args_list, capture_output=True, text=True, check=False)
+        if result.stdout:
+            emit({"status": "Running", "step": "colmap", "progress": 0.4, "stdout": result.stdout})
+        if result.stderr:
+            emit({"status": "Running", "step": "colmap", "progress": 0.4, "stderr": result.stderr})
+        if result.returncode != 0:
+            raise RuntimeError("COLMAP_CMD failed")
+    else:
+        (interim_dir / "cameras.txt").write_text("# placeholder cameras", encoding="utf-8")
+        (interim_dir / "images.txt").write_text("# placeholder images", encoding="utf-8")
+        (interim_dir / "points3D.txt").write_text("# placeholder points", encoding="utf-8")
+
     emit({"status": "Running", "step": "colmap", "progress": 0.6})
     emit({"status": "Completed", "output": str(interim_dir)})
     return 0
