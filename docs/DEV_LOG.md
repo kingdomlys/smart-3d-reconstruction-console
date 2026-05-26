@@ -10,3 +10,4 @@
 - Added COLMAP/3DGS command hooks and safe output download endpoint.
 - Added React + Vite + R3F frontend scaffold with upload + preview flow.
 - Added task listing API and frontend recent task selector.
+- Added pipeline setup guide and local wrapper scripts for COLMAP/3DGS.
