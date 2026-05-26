@@ -13,6 +13,11 @@ Recommended setup:
 2. Install TripoSR and its dependencies in that env.
 3. Set environment variables for the backend:
 
+Quick start (Windows PowerShell):
+```
+scripts/setup_triposr.ps1
+```
+
 ```
 TRIPOSR_PY=C:/path/to/triposr/env/python.exe
 TRIPOSR_CMD=python path/to/triposr_infer.py
@@ -30,6 +35,11 @@ Recommended setup:
 1. Install COLMAP on the system (or in a dedicated conda env).
 2. Set:
 
+Quick start (Windows PowerShell):
+```
+scripts/setup_colmap.ps1
+```
+
 ```
 COLMAP_CMD=python backend/workers/colmap_pipeline.py
 COLMAP_BIN=colmap
@@ -45,6 +55,11 @@ Required:
 Recommended setup:
 1. Install the 3DGS repo in its own env.
 2. Set:
+
+Quick start (Windows PowerShell):
+```
+scripts/setup_3dgs.ps1
+```
 
 ```
 DGS_CMD=python backend/workers/gsplat_pipeline.py
