@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git init; git add \\.; git commit -m \"Initialize project and add PROJECT_PLAN\\.md\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
