@@ -15,6 +15,7 @@ export default function App() {
   const [event, setEvent] = useState(null);
   const [outputUrl, setOutputUrl] = useState("");
   const [outputPath, setOutputPath] = useState("");
+  const [tasks, setTasks] = useState([]);
 
   const wsBase = useMemo(() => toWebSocketUrl(apiBase), [apiBase]);
 
@@ -44,6 +45,10 @@ export default function App() {
   }, [taskId, wsBase, apiBase]);
 
   useEffect(() => {
+    loadTasks();
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (outputUrl) {
         URL.revokeObjectURL(outputUrl);
@@ -59,6 +64,25 @@ export default function App() {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     setOutputUrl(url);
+  }
+
+  async function loadTasks() {
+    const response = await fetch(`${apiBase}/api/tasks?limit=20`);
+    if (!response.ok) {
+      return;
+    }
+    const payload = await response.json();
+    setTasks(payload.items || []);
+  }
+
+  async function selectTask(task) {
+    setTaskId(task.id);
+    setStatus(task.status || "Queued");
+    setOutputPath(task.output_path || "");
+    setOutputUrl("");
+    if (task.output_path) {
+      await fetchOutput(task.id, apiBase);
+    }
   }
 
   async function handleSubmit(event) {
@@ -87,6 +111,7 @@ export default function App() {
     setStatus(payload.status || "Queued");
     setOutputUrl("");
     setOutputPath("");
+    loadTasks();
   }
 
   return (
@@ -126,6 +151,29 @@ export default function App() {
           <div className="meta">
             <p>Task ID: {taskId || "—"}</p>
             <p>Output: {outputPath || "—"}</p>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Recent Tasks</h2>
+            <button type="button" className="ghost" onClick={loadTasks}>
+              Refresh
+            </button>
+          </div>
+          <div className="task-list">
+            {tasks.length === 0 && <p className="muted">No tasks yet.</p>}
+            {tasks.map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                className={`task-row ${task.id === taskId ? "active" : ""}`}
+                onClick={() => selectTask(task)}
+              >
+                <span>{task.id.slice(0, 8)}</span>
+                <span>{task.status}</span>
+              </button>
+            ))}
           </div>
         </section>
 

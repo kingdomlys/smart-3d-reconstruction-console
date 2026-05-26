@@ -4,7 +4,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DB_PATH = BASE_DIR / "data" / "tasks.db"
@@ -80,3 +80,16 @@ def get_task(task_id: str) -> Optional[Dict[str, Any]]:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return dict(row) if row else None
+
+
+def list_tasks(limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM tasks
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        ).fetchall()
+        return [dict(row) for row in rows]

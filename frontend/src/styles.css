@@ -92,6 +92,12 @@ h1 {
   margin-top: 0;
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .form {
   display: grid;
   gap: 12px;
@@ -118,8 +124,46 @@ button:hover {
   background: #e56f2f;
 }
 
+button.ghost {
+  background: transparent;
+  border: 1px solid #e5d9cf;
+  color: var(--ink);
+  padding: 6px 12px;
+  border-radius: 10px;
+}
+
+button.ghost:hover {
+  background: #f3ece6;
+}
+
 .meta {
   margin-top: 16px;
+  color: var(--muted);
+}
+
+.task-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.task-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #efe5dd;
+  background: #fffaf4;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.task-row.active {
+  border-color: var(--accent);
+  box-shadow: 0 8px 18px rgba(239, 123, 60, 0.2);
+}
+
+.muted {
   color: var(--muted);
 }
 

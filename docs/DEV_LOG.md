@@ -9,3 +9,4 @@
 - Added image-only upload validation to avoid non-image task failures.
 - Added COLMAP/3DGS command hooks and safe output download endpoint.
 - Added React + Vite + R3F frontend scaffold with upload + preview flow.
+- Added task listing API and frontend recent task selector.

@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .db import create_task, get_task, init_db
+from .db import create_task, get_task, init_db, list_tasks
 from .storage import ensure_task_dirs, save_uploads
 from .tasks import TASK_QUEUE, task_worker
 
@@ -100,6 +100,15 @@ async def get_task_endpoint(task_id: str) -> dict:
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+@app.get("/api/tasks")
+async def list_tasks_endpoint(limit: int = 20, offset: int = 0) -> dict:
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="Invalid limit")
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="Invalid offset")
+    return {"items": list_tasks(limit=limit, offset=offset)}
 
 
 @app.get("/api/tasks/{task_id}/output")
