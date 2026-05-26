@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -53,6 +54,9 @@ def _append_log(task_id: str, message: str) -> None:
 
 
 def _get_tripo_python() -> str:
+    override = os.getenv("TRIPOSR_PY")
+    if override:
+        return override
     return str(Path(sys.executable))
 
 
