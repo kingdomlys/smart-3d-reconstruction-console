@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 import os
 import subprocess
 import sys
@@ -60,9 +61,35 @@ def _get_tripo_python() -> str:
     return str(Path(sys.executable))
 
 
-def _run_tripo_worker(task_id: str) -> Path:
+def _get_worker_python() -> str:
+    return str(Path(sys.executable))
+
+
+async def _read_stream(
+    stream: asyncio.StreamReader,
+    task_id: str,
+    label: str,
+    on_event: callable | None = None,
+    parse_json: bool = False,
+) -> None:
+    while True:
+        line = await stream.readline()
+        if not line:
+            break
+        text = line.decode(errors="replace").rstrip()
+        _append_log(task_id, f"[{label}] {text}")
+        if parse_json and on_event:
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            await on_event(payload)
+
+
+async def _run_tripo_worker(task_id: str, on_event: callable) -> Path:
     dirs = ensure_task_dirs(task_id)
     inputs_dir = Path(dirs["inputs_dir"])
+    interim_dir = Path(dirs["interim_dir"])
     outputs_dir = Path(dirs["outputs_dir"])
     worker_script = Path(__file__).resolve().parents[1] / "workers" / "worker_tripo.py"
     cmd = [
@@ -70,20 +97,97 @@ def _run_tripo_worker(task_id: str) -> Path:
         str(worker_script),
         "--input-dir",
         str(inputs_dir),
+        "--interim-dir",
+        str(interim_dir),
         "--output-dir",
         str(outputs_dir),
     ]
     _append_log(task_id, f"[tripo] cmd: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if result.stdout:
-        _append_log(task_id, f"[tripo][stdout] {result.stdout.strip()}")
-    if result.stderr:
-        _append_log(task_id, f"[tripo][stderr] {result.stderr.strip()}")
-    if result.returncode != 0:
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout and process.stderr
+
+    await asyncio.gather(
+        _read_stream(process.stdout, task_id, "tripo:stdout", on_event, True),
+        _read_stream(process.stderr, task_id, "tripo:stderr"),
+    )
+    return_code = await process.wait()
+    if return_code != 0:
         raise RuntimeError("TripoSR worker failed")
     output_path = outputs_dir / "output.glb"
     if not output_path.exists():
         raise RuntimeError("TripoSR worker did not produce output.glb")
+    return output_path
+
+
+async def _run_colmap_worker(task_id: str, on_event: callable) -> Path:
+    dirs = ensure_task_dirs(task_id)
+    inputs_dir = Path(dirs["inputs_dir"])
+    interim_dir = Path(dirs["interim_dir"])
+    worker_script = Path(__file__).resolve().parents[1] / "workers" / "worker_colmap.py"
+    cmd = [
+        _get_worker_python(),
+        str(worker_script),
+        "--input-dir",
+        str(inputs_dir),
+        "--interim-dir",
+        str(interim_dir),
+    ]
+    _append_log(task_id, f"[colmap] cmd: {' '.join(cmd)}")
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout and process.stderr
+    await asyncio.gather(
+        _read_stream(process.stdout, task_id, "colmap:stdout", on_event, True),
+        _read_stream(process.stderr, task_id, "colmap:stderr"),
+    )
+    return_code = await process.wait()
+    if return_code != 0:
+        raise RuntimeError("COLMAP worker failed")
+    sparse_dir = interim_dir / "colmap" / "sparse"
+    if not sparse_dir.exists():
+        raise RuntimeError("COLMAP worker did not produce sparse output")
+    return sparse_dir
+
+
+async def _run_3dgs_worker(task_id: str, on_event: callable) -> Path:
+    dirs = ensure_task_dirs(task_id)
+    interim_dir = Path(dirs["interim_dir"])
+    outputs_dir = Path(dirs["outputs_dir"])
+    worker_script = Path(__file__).resolve().parents[1] / "workers" / "worker_3dgs.py"
+    cmd = [
+        _get_worker_python(),
+        str(worker_script),
+        "--interim-dir",
+        str(interim_dir),
+        "--output-dir",
+        str(outputs_dir),
+        "--iterations",
+        "1000",
+    ]
+    _append_log(task_id, f"[3dgs] cmd: {' '.join(cmd)}")
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout and process.stderr
+    await asyncio.gather(
+        _read_stream(process.stdout, task_id, "3dgs:stdout", on_event, True),
+        _read_stream(process.stderr, task_id, "3dgs:stderr"),
+    )
+    return_code = await process.wait()
+    if return_code != 0:
+        raise RuntimeError("3DGS worker failed")
+    output_path = outputs_dir / "point_cloud.ply"
+    if not output_path.exists():
+        raise RuntimeError("3DGS worker did not produce point_cloud.ply")
     return output_path
 
 
@@ -103,9 +207,13 @@ async def task_worker() -> None:
 
             if task["image_count"] == 1:
                 await TASK_QUEUE.broadcast(
-                    task_id, {"status": "Running", "step": "TripoSR", "progress": 0.2}
+                    task_id, {"status": "Running", "step": "TripoSR", "progress": 0.1}
                 )
-                output_path = _run_tripo_worker(task_id)
+
+                async def on_event(payload: dict) -> None:
+                    await TASK_QUEUE.broadcast(task_id, payload)
+
+                output_path = await _run_tripo_worker(task_id, on_event)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(
                     task_id,
@@ -114,23 +222,18 @@ async def task_worker() -> None:
                 _append_log(task_id, "Task completed")
                 logger.info("Task completed", extra={"task_id": task_id})
             else:
-                steps = ["Preparing", "Routing", "Processing", "Finalizing"]
-                for idx, step in enumerate(steps, start=1):
-                    await asyncio.sleep(1)
-                    await TASK_QUEUE.broadcast(
-                        task_id,
-                        {"status": "Running", "step": step, "progress": idx / len(steps)},
-                    )
-                    logger.info(
-                        "Task progress",
-                        extra={"task_id": task_id, "step": step, "progress": idx / len(steps)},
-                    )
-                    _append_log(task_id, f"Progress: {step}")
+                await TASK_QUEUE.broadcast(
+                    task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
+                )
 
-                dirs = ensure_task_dirs(task_id)
-                output_path = Path(dirs["outputs_dir"]) / "placeholder.txt"
-                output_path.write_text("Placeholder output", encoding="utf-8")
+                async def on_event(payload: dict) -> None:
+                    await TASK_QUEUE.broadcast(task_id, payload)
 
+                await _run_colmap_worker(task_id, on_event)
+                await TASK_QUEUE.broadcast(
+                    task_id, {"status": "Running", "step": "3DGS", "progress": 0.7}
+                )
+                output_path = await _run_3dgs_worker(task_id, on_event)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(
                     task_id, {"status": "Completed", "output_path": str(output_path)}

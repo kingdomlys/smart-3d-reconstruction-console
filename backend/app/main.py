@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import List
 from uuid import uuid4
 
@@ -14,6 +15,8 @@ from .tasks import TASK_QUEUE, task_worker
 app = FastAPI(title="3D Reconstruction Control Plane")
 logger = logging.getLogger("control_plane")
 logging.basicConfig(level=logging.INFO)
+
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 @app.get("/")
@@ -52,6 +55,22 @@ async def create_task_endpoint(
         raise HTTPException(
             status_code=400,
             detail={"error": "Empty filename detected", "hint": "Check file names"},
+        )
+
+    invalid_files = [
+        file.filename
+        for file in files
+        if file.filename
+        and Path(file.filename).suffix.lower() not in ALLOWED_EXTENSIONS
+    ]
+    if invalid_files:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Unsupported file type",
+                "allowed": sorted(ALLOWED_EXTENSIONS),
+                "invalid_files": invalid_files,
+            },
         )
 
     task_id = str(uuid4())
