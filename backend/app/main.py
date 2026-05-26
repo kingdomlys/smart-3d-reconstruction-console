@@ -18,7 +18,11 @@ logging.basicConfig(level=logging.INFO)
 
 @app.get("/")
 async def root() -> dict:
-    return {"status": "ok", "service": "control-plane"}
+    return {
+        "status": "ok",
+        "service": "control-plane",
+        "message": "ready",
+    }
 
 
 @app.on_event("startup")
@@ -33,13 +37,22 @@ async def create_task_endpoint(
     mode: str = "fast",
 ) -> dict:
     if not files:
-        raise HTTPException(status_code=400, detail="No files provided")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "No files provided", "hint": "Upload at least one file"},
+        )
 
     if mode not in {"fast", "hq"}:
-        raise HTTPException(status_code=400, detail="Invalid mode")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid mode", "allowed": ["fast", "hq"]},
+        )
 
     if any(not file.filename for file in files):
-        raise HTTPException(status_code=400, detail="Empty filename detected")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Empty filename detected", "hint": "Check file names"},
+        )
 
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)
