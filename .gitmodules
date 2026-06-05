@@ -1,0 +1,6 @@
+[submodule "third_party/TripoSR"]
+	path = third_party/TripoSR
+	url = https://github.com/VAST-AI-Research/TripoSR
+[submodule "third_party/gaussian-splatting"]
+	path = third_party/gaussian-splatting
+	url = https://github.com/graphdeco-inria/gaussian-splatting

@@ -20,7 +20,9 @@ scripts/setup_triposr.ps1
 
 ```
 TRIPOSR_PY=C:/path/to/triposr/env/python.exe
-TRIPOSR_CMD=python path/to/triposr_infer.py
+TRIPOSR_CMD=python backend/workers/triposr_infer.py
+TRIPOSR_REPO=third_party/TripoSR
+TRIPOSR_DEVICE=cuda:0
 USE_REMBG=1
 ```
 

@@ -12,3 +12,4 @@
 - Added task listing API and frontend recent task selector.
 - Added pipeline setup guide and local wrapper scripts for COLMAP/3DGS.
 - Added setup scripts for TripoSR/COLMAP/3DGS and third_party placeholders.
+- Added TripoSR CLI wrapper for run.py integration.
