@@ -1,53 +1,48 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import subprocess
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backend.pipelines.context import PipelineContext
+from backend.pipelines.gaussian_splatting import GaussianSplattingPipeline
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="3DGS worker placeholder")
+    parser = argparse.ArgumentParser(description="3DGS pipeline compatibility worker")
     parser.add_argument("--interim-dir", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--iterations", required=True)
     return parser.parse_args()
 
 
-def emit(payload: dict) -> None:
-    print(json.dumps(payload), flush=True)
-
-
 def main() -> int:
     args = parse_args()
-    interim_dir = Path(args.interim_dir)
+    os.environ.setdefault("DGS_ITERATIONS", str(args.iterations))
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    cmd = os.getenv("DGS_CMD")
-    emit({"status": "Running", "step": "3dgs", "progress": 0.8})
-    if cmd:
-        args_list = cmd.split() + [
-            "--interim-dir",
-            str(interim_dir),
-            "--output-dir",
-            str(output_dir),
-            "--iterations",
-            str(args.iterations),
-        ]
-        result = subprocess.run(args_list, capture_output=True, text=True, check=False)
-        if result.stdout:
-            emit({"status": "Running", "step": "3dgs", "progress": 0.9, "stdout": result.stdout})
-        if result.stderr:
-            emit({"status": "Running", "step": "3dgs", "progress": 0.9, "stderr": result.stderr})
-        if result.returncode != 0:
-            raise RuntimeError("DGS_CMD failed")
-    output_path = output_dir / "point_cloud.ply"
-    if not output_path.exists():
-        output_path.write_text("ply placeholder", encoding="utf-8")
-    emit({"status": "Completed", "output": str(output_path)})
+    context = PipelineContext(
+        task_id="standalone",
+        mode="fast",
+        inputs_dir=Path(args.interim_dir).parent / "inputs",
+        interim_dir=Path(args.interim_dir),
+        outputs_dir=output_dir,
+        logs_path=output_dir.parent / "logs.txt",
+        emit_event=lambda payload: context_emit(payload),
+    )
+    GaussianSplattingPipeline().run(context)
     return 0
+
+
+def context_emit(payload: dict) -> None:
+    import json
+
+    print(json.dumps(payload), flush=True)
 
 
 if __name__ == "__main__":

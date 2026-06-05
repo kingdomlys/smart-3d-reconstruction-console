@@ -11,14 +11,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .db import create_task, get_task, init_db, list_tasks
-from .storage import ensure_task_dirs, save_uploads
+from .settings import SETTINGS
+from .storage import (
+    UploadValidationError,
+    ensure_task_dirs,
+    ensure_tasks_root,
+    get_tasks_root,
+    save_uploads,
+    validate_uploads,
+)
 from .tasks import TASK_QUEUE, task_worker
 
 app = FastAPI(title="3D Reconstruction Control Plane")
 logger = logging.getLogger("control_plane")
 logging.basicConfig(level=logging.INFO)
-
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,13 +41,25 @@ async def root() -> dict:
         "status": "ok",
         "service": "control-plane",
         "message": "ready",
+        "tasks_root": str(get_tasks_root()),
     }
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    ensure_tasks_root()
     init_db()
     asyncio.create_task(task_worker())
+
+
+@app.get("/api/config")
+async def get_config() -> dict:
+    return {
+        "tasks_root": str(SETTINGS.tasks_root),
+        "max_upload_files": SETTINGS.max_upload_files,
+        "max_image_pixels": SETTINGS.max_image_pixels,
+        "max_image_long_edge": SETTINGS.max_image_long_edge,
+    }
 
 
 @app.post("/api/tasks")
@@ -67,21 +85,10 @@ async def create_task_endpoint(
             detail={"error": "Empty filename detected", "hint": "Check file names"},
         )
 
-    invalid_files = [
-        file.filename
-        for file in files
-        if file.filename
-        and Path(file.filename).suffix.lower() not in ALLOWED_EXTENSIONS
-    ]
-    if invalid_files:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Unsupported file type",
-                "allowed": sorted(ALLOWED_EXTENSIONS),
-                "invalid_files": invalid_files,
-            },
-        )
+    try:
+        validate_uploads(files)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
 
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)
