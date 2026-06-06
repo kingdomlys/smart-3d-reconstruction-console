@@ -7,6 +7,7 @@ from typing import BinaryIO, List, Protocol
 from .settings import SETTINGS
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+OUTPUT_EXTENSIONS = {".glb", ".ply", ".splat", ".zip", ".txt", ".json", ".bin", ".npz"}
 
 
 class UploadFileLike(Protocol):
@@ -56,6 +57,58 @@ def ensure_task_dirs(task_id: str) -> dict:
         "interim_dir": interim_dir,
         "outputs_dir": outputs_dir,
     }
+
+
+def read_task_log(task_id: str, max_bytes: int = 256_000) -> str:
+    task_dir = _safe_task_dir(task_id)
+    logs_path = task_dir / "logs.txt"
+    if not logs_path.exists() or not logs_path.is_file():
+        return ""
+
+    size = logs_path.stat().st_size
+    with logs_path.open("rb") as file:
+        if size > max_bytes:
+            file.seek(size - max_bytes)
+            data = file.read()
+            return "[truncated]\n" + data.decode("utf-8", errors="replace")
+        return file.read().decode("utf-8", errors="replace")
+
+
+def list_output_files(task_id: str) -> list[dict]:
+    dirs = ensure_task_dirs(task_id)
+    outputs_dir = Path(dirs["outputs_dir"]).resolve()
+    if not outputs_dir.exists():
+        return []
+
+    files = []
+    for output_file in sorted(path for path in outputs_dir.rglob("*") if path.is_file()):
+        resolved = output_file.resolve()
+        if outputs_dir not in resolved.parents:
+            continue
+        if resolved.suffix.lower() not in OUTPUT_EXTENSIONS:
+            continue
+        relative_path = resolved.relative_to(outputs_dir).as_posix()
+        files.append(
+            {
+                "name": resolved.name,
+                "relative_path": relative_path,
+                "type": resolved.suffix.lower().lstrip(".") or "file",
+                "size": resolved.stat().st_size,
+                "download_url": f"/api/tasks/{task_id}/outputs/{relative_path}",
+            }
+        )
+    return files
+
+
+def resolve_output_file(task_id: str, relative_path: str) -> Path:
+    dirs = ensure_task_dirs(task_id)
+    outputs_dir = Path(dirs["outputs_dir"]).resolve()
+    target = (outputs_dir / relative_path).resolve()
+    if outputs_dir not in target.parents:
+        raise FileNotFoundError("Invalid output path")
+    if not target.exists() or not target.is_file():
+        raise FileNotFoundError("Output file missing")
+    return target
 
 
 def _display_name(filename: str | None) -> str:

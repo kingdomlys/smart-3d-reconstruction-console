@@ -13,3 +13,12 @@
 - Added pipeline setup guide and local wrapper scripts for COLMAP/3DGS.
 - Added setup scripts for TripoSR/COLMAP/3DGS and third_party placeholders.
 - Added TripoSR CLI wrapper for run.py integration.
+
+## 2026-06-06
+- Verified Milestone 0/1 smoke checks: upload validation, pipeline registry, and unified worker entry.
+- Added task log API, output list API, per-output download API, and retry API for local task debugging.
+- Added startup recovery that marks leftover Pending/Running tasks as Interrupted after server restart.
+- Added frontend task observability: error display, logs panel, multi-output download list, and retry action.
+- Added task observability smoke coverage for log reading, output listing, path traversal rejection, and interrupted task marking.
+- Verification: backend API, upload validation, pipeline registry, worker entry, and task observability smoke checks passed in `.venv`.
+- Current environment note: frontend build could not run because this shell lacks Node/npm.

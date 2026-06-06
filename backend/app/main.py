@@ -8,15 +8,18 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 
-from .db import create_task, get_task, init_db, list_tasks
+from .db import create_task, get_task, init_db, list_tasks, mark_incomplete_tasks_interrupted, update_task
 from .settings import SETTINGS
 from .storage import (
     UploadValidationError,
     ensure_task_dirs,
     ensure_tasks_root,
     get_tasks_root,
+    list_output_files,
+    read_task_log,
+    resolve_output_file,
     save_uploads,
     validate_uploads,
 )
@@ -49,6 +52,9 @@ async def root() -> dict:
 async def startup_event() -> None:
     ensure_tasks_root()
     init_db()
+    interrupted = mark_incomplete_tasks_interrupted()
+    if interrupted:
+        logger.warning("Marked incomplete tasks as interrupted", extra={"count": interrupted})
     asyncio.create_task(task_worker())
 
 
@@ -135,6 +141,55 @@ async def get_task_output(task_id: str) -> FileResponse:
         raise HTTPException(status_code=400, detail="Invalid output path")
 
     return FileResponse(output_file, filename=output_file.name)
+
+
+@app.get("/api/tasks/{task_id}/logs", response_class=PlainTextResponse)
+async def get_task_logs(task_id: str) -> PlainTextResponse:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return PlainTextResponse(read_task_log(task_id))
+
+
+@app.get("/api/tasks/{task_id}/outputs")
+async def get_task_outputs(task_id: str) -> dict:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    outputs = list_output_files(task_id)
+    return {"items": outputs, "output_types": sorted({item["type"] for item in outputs})}
+
+
+@app.get("/api/tasks/{task_id}/outputs/{relative_path:path}")
+async def download_task_output(task_id: str, relative_path: str) -> FileResponse:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        output_file = resolve_output_file(task_id, relative_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(output_file, filename=output_file.name)
+
+
+@app.post("/api/tasks/{task_id}/retry")
+async def retry_task(task_id: str) -> dict:
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] in {"Pending", "Running"}:
+        raise HTTPException(status_code=409, detail="Task is already active")
+
+    dirs = ensure_task_dirs(task_id)
+    input_files = [path for path in Path(dirs["inputs_dir"]).iterdir() if path.is_file()]
+    if not input_files:
+        raise HTTPException(status_code=400, detail="Task has no saved inputs to retry")
+
+    update_task(task_id, status="Pending", output_path=None, error=None)
+    await TASK_QUEUE.enqueue(task_id)
+    updated = get_task(task_id) or {}
+    await TASK_QUEUE.broadcast(task_id, updated)
+    return updated
 
 
 @app.websocket("/ws/tasks/{task_id}")

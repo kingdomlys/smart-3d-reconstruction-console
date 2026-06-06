@@ -11,7 +11,7 @@ from typing import Dict, Set
 from fastapi import WebSocket
 
 from .db import get_task, update_task
-from .storage import ensure_task_dirs
+from .storage import ensure_task_dirs, list_output_files
 
 logger = logging.getLogger("control_plane")
 
@@ -62,6 +62,17 @@ def _get_tripo_python() -> str:
 
 def _get_worker_python() -> str:
     return str(Path(sys.executable))
+
+
+def _task_output_payload(task_id: str, output_path: Path) -> dict:
+    outputs = list_output_files(task_id)
+    output_types = sorted({item["type"] for item in outputs})
+    return {
+        "status": "Completed",
+        "output_path": str(output_path),
+        "outputs": outputs,
+        "output_types": output_types,
+    }
 
 
 async def _read_stream(
@@ -179,10 +190,7 @@ async def task_worker() -> None:
 
                 output_path = await _run_tripo_worker(task_id, task["mode"], on_event)
                 update_task(task_id, status="Completed", output_path=str(output_path))
-                await TASK_QUEUE.broadcast(
-                    task_id,
-                    {"status": "Completed", "output_path": str(output_path)},
-                )
+                await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))
                 _append_log(task_id, "Task completed")
                 logger.info("Task completed", extra={"task_id": task_id})
             else:
@@ -199,9 +207,7 @@ async def task_worker() -> None:
                 )
                 output_path = await _run_3dgs_worker(task_id, task["mode"], on_event)
                 update_task(task_id, status="Completed", output_path=str(output_path))
-                await TASK_QUEUE.broadcast(
-                    task_id, {"status": "Completed", "output_path": str(output_path)}
-                )
+                await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))
                 _append_log(task_id, "Task completed")
                 logger.info("Task completed", extra={"task_id": task_id})
         except Exception as exc:

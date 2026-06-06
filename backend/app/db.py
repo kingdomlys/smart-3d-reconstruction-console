@@ -4,7 +4,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DB_PATH = BASE_DIR / "data" / "tasks.db"
@@ -42,6 +42,32 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+
+def mark_incomplete_tasks_interrupted(statuses: Iterable[str] = ("Pending", "Running")) -> int:
+    status_list = list(statuses)
+    if not status_list:
+        return 0
+
+    placeholders = ",".join("?" for _ in status_list)
+    with get_conn() as conn:
+        cursor = conn.execute(
+            f"""
+            UPDATE tasks
+            SET status = ?,
+                error = COALESCE(error, ?),
+                updated_at = ?
+            WHERE status IN ({placeholders})
+            """,
+            (
+                "Interrupted",
+                "Task interrupted by server restart",
+                _utc_now(),
+                *status_list,
+            ),
+        )
+        conn.commit()
+        return cursor.rowcount
 
 
 def create_task(task_id: str, mode: str, image_count: int) -> Dict[str, Any]:
