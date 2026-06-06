@@ -47,7 +47,7 @@ def main() -> int:
 
             pipelines = client.get("/api/pipelines")
             assert pipelines.status_code == 200, pipelines.text
-            assert len(pipelines.json()["items"]) == 3
+            assert len(pipelines.json()["items"]) == 4
 
             response = client.post(
                 "/api/tasks",

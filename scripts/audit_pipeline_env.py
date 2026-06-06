@@ -41,6 +41,39 @@ def audit_triposr() -> dict[str, object]:
     }
 
 
+def audit_vggt() -> dict[str, object]:
+    code = (
+        "from pathlib import Path; "
+        "import torch; "
+        "repo=Path(r'E:/vscode/workspace/vggt'); "
+        "checkpoint=repo/'model_pretrained_weight'/'model.pt'; "
+        "runner=repo/'run_local_vggt_pointcloud.py'; "
+        "preview=repo/'preview_ply_views.py'; "
+        "print('torch=' + torch.__version__); "
+        "print('cuda=' + str(torch.cuda.is_available())); "
+        "print('torch_cuda=' + str(torch.version.cuda)); "
+        "print('gpu=' + (torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')); "
+        "print('repo_exists=' + str(repo.exists())); "
+        "print('runner_exists=' + str(runner.exists())); "
+        "print('preview_exists=' + str(preview.exists())); "
+        "print('checkpoint_exists=' + str(checkpoint.exists()))"
+    )
+    rc, output = conda_python("vggt", code)
+    ok = (
+        rc == 0
+        and "cuda=True" in output
+        and "runner_exists=True" in output
+        and "preview_exists=True" in output
+        and "checkpoint_exists=True" in output
+    )
+    return {
+        "name": "VGGT",
+        "ok": ok,
+        "return_code": rc,
+        "details": output,
+    }
+
+
 def audit_colmap() -> dict[str, object]:
     colmap_path = shutil.which("colmap")
     rc, output = run_command(["conda", "run", "-n", "colmap_env", "python", "-c", "import shutil; print(shutil.which('colmap'))"])
@@ -72,14 +105,14 @@ def audit_3dgs() -> dict[str, object]:
 
 
 def main() -> int:
-    audits = [audit_triposr(), audit_colmap(), audit_3dgs()]
+    audits = [audit_triposr(), audit_vggt(), audit_colmap(), audit_3dgs()]
     for item in audits:
         status = "OK" if item["ok"] else "NEEDS_ATTENTION"
         print(f"## {item['name']}: {status} (rc={item['return_code']})")
         print(item["details"] or "-")
         print()
 
-    if not audits[0]["ok"]:
+    if not audits[0]["ok"] or not audits[1]["ok"]:
         return 1
     return 0
 

@@ -11,12 +11,21 @@ from .settings import BASE_DIR, SETTINGS
 
 PIPELINE_ENV_VARS = {
     "triposr": ["TRIPOSR_CMD", "TRIPOSR_PY", "TRIPOSR_REPO", "TRIPOSR_DEVICE", "USE_REMBG"],
+    "vggt": [
+        "VGGT_PY",
+        "VGGT_REPO",
+        "VGGT_CHECKPOINT",
+        "VGGT_MAX_IMAGES",
+        "VGGT_CONF_PERCENTILE",
+        "VGGT_SOURCE",
+    ],
     "colmap": ["COLMAP_CMD", "COLMAP_BIN"],
     "gaussian_splatting": ["DGS_CMD", "DGS_TRAIN_SCRIPT", "DGS_ITERATIONS"],
 }
 
 PIPELINE_DEPENDENCIES = {
     "triposr": {"TripoSR source": BASE_DIR / "third_party" / "TripoSR"},
+    "vggt": {"VGGT source": BASE_DIR.parent / "vggt"},
     "colmap": {},
     "gaussian_splatting": {
         "Gaussian Splatting source": BASE_DIR / "third_party" / "gaussian-splatting"
@@ -25,6 +34,7 @@ PIPELINE_DEPENDENCIES = {
 
 PIPELINE_HINTS = {
     "triposr": "Set TRIPOSR_CMD or allow placeholder mode for local smoke tests.",
+    "vggt": "Set VGGT_PY to the vggt conda python and VGGT_REPO to the local VGGT checkout.",
     "colmap": "Set COLMAP_CMD to run the in-repository wrapper or external COLMAP pipeline.",
     "gaussian_splatting": "Set DGS_CMD to run the 3DGS wrapper or training entry point.",
 }
@@ -50,7 +60,7 @@ def _dependency_status(path: Path) -> dict[str, Any]:
 def _support_summary(pipeline_id: str) -> str:
     if pipeline_id == "triposr":
         return "single image"
-    if pipeline_id in {"colmap", "gaussian_splatting"}:
+    if pipeline_id in {"vggt", "colmap", "gaussian_splatting"}:
         return "multiple images"
     return "custom"
 

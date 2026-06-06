@@ -4,9 +4,11 @@ from .base import Pipeline
 from .colmap.pipeline import ColmapPipeline
 from .gaussian_splatting.pipeline import GaussianSplattingPipeline
 from .triposr.pipeline import TripoSRPipeline
+from .vggt.pipeline import VggtPipeline
 
 _PIPELINES: dict[str, Pipeline] = {
     "triposr": TripoSRPipeline(),
+    "vggt": VggtPipeline(),
     "colmap": ColmapPipeline(),
     "gaussian_splatting": GaussianSplattingPipeline(),
 }

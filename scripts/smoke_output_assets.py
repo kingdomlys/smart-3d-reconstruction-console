@@ -30,14 +30,20 @@ def main() -> int:
         (outputs_dir / "output.glb").write_text("glb", encoding="utf-8")
         (outputs_dir / "point_cloud.ply").write_text("ply", encoding="utf-8")
         (outputs_dir / "scene.splat").write_text("splat", encoding="utf-8")
+        (outputs_dir / "pointcloud_front_xy.png").write_text("png", encoding="utf-8")
         (outputs_dir / "notes.md").write_text("ignored", encoding="utf-8")
 
         outputs = storage_module.list_output_files("smoke-assets")
         output_types = {item["type"] for item in outputs}
         relative_paths = {item["relative_path"] for item in outputs}
 
-        assert output_types == {"glb", "ply", "splat"}, output_types
-        assert relative_paths == {"output.glb", "point_cloud.ply", "scene.splat"}, relative_paths
+        assert output_types == {"glb", "ply", "png", "splat"}, output_types
+        assert relative_paths == {
+            "output.glb",
+            "point_cloud.ply",
+            "pointcloud_front_xy.png",
+            "scene.splat",
+        }, relative_paths
         for item in outputs:
             assert item["download_url"].startswith("/api/tasks/smoke-assets/outputs/")
 

@@ -15,6 +15,7 @@ def main() -> int:
         os.environ["TASKS_ROOT"] = str(Path(tmp) / "tasks")
         os.environ["TRIPOSR_ALLOW_PLACEHOLDER"] = "1"
         os.environ["COLMAP_CMD"] = "secret-colmap-command"
+        os.environ["VGGT_PY"] = "secret-vggt-python"
 
         from fastapi.testclient import TestClient
 
@@ -29,11 +30,13 @@ def main() -> int:
             payload = response.json()
 
         items = {item["id"]: item for item in payload["items"]}
-        assert set(items) == {"triposr", "colmap", "gaussian_splatting"}, items
+        assert set(items) == {"triposr", "vggt", "colmap", "gaussian_splatting"}, items
         assert items["triposr"]["placeholder_enabled"] is True
         assert items["triposr"]["ready"] is True
+        assert "VGGT_PY" in items["vggt"]["configured_env"]
         assert "COLMAP_CMD" in items["colmap"]["configured_env"]
         assert "secret-colmap-command" not in str(payload)
+        assert "secret-vggt-python" not in str(payload)
         assert payload["limits"]["max_upload_files"] == 8
         assert payload["limits"]["max_upload_bytes"] == 20 * 1024 * 1024
 

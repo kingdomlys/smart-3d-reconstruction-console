@@ -1,6 +1,6 @@
 # Pipeline Setup Guide
 
-This project ships in-repository pipeline implementations for TripoSR, COLMAP, and 3DGS. The control plane runs them through `backend/workers/run_pipeline.py`, and each pipeline can call third-party code through environment variables when the real CUDA dependencies are installed.
+This project ships pipeline integrations for TripoSR, VGGT, COLMAP, and 3DGS. The control plane runs them through `backend/workers/run_pipeline.py`, and each pipeline can call third-party code through environment variables when the real CUDA dependencies are installed.
 
 ## 1) TripoSR
 
@@ -61,7 +61,50 @@ $env:TRIPOSR_PY="E:/conda/workspace/envs/tripo_env/python.exe"
 
 This runs the FastAPI control-plane queue in the backend environment while executing real TripoSR inference in `tripo_env` through `TRIPOSR_PY`. It verifies that a task reaches `Completed` and writes a non-empty `output.glb` through the same worker path used by the app.
 
-## 2) COLMAP
+## 2) VGGT
+
+VGGT is the default multi-image route. The backend runs the control-plane worker in `.venv`, then delegates model inference to the Python executable configured by `VGGT_PY`.
+
+Required:
+- A working VGGT checkout.
+- Local VGGT checkpoint weights.
+- CUDA-capable PyTorch in the `vggt` conda environment.
+
+Verified local command:
+
+```
+conda run -n vggt python run_local_vggt_pointcloud.py --image_folder examples\kitchen\images --checkpoint model_pretrained_weight\model.pt --output_dir outputs\local_vggt_pointcloud --max_images 3 --conf_percentile 70 --source depth
+```
+
+Preview generation command:
+
+```
+conda run -n vggt python preview_ply_views.py outputs\local_vggt_pointcloud\pointcloud_depth_3imgs_p70.ply
+```
+
+Backend environment variables:
+
+```
+MULTI_IMAGE_PIPELINE=vggt
+VGGT_PY=E:/conda/workspace/envs/vggt/python.exe
+VGGT_REPO=E:/vscode/workspace/vggt
+VGGT_CHECKPOINT=E:/vscode/workspace/vggt/model_pretrained_weight/model.pt
+VGGT_MAX_IMAGES=3
+VGGT_CONF_PERCENTILE=70
+VGGT_SOURCE=depth
+VGGT_PREPROCESS_MODE=crop
+VGGT_PREVIEW=1
+```
+
+Control-plane real smoke command:
+
+```
+.\.venv\Scripts\python.exe scripts\smoke_vggt_control_plane_real.py
+```
+
+The smoke creates a temporary task, copies three kitchen images from the VGGT checkout, runs the same queue path used by the app, and verifies a real `.ply`, `predictions.npz`, and three preview `.png` files.
+
+## 3) COLMAP
 
 Required:
 - COLMAP installed and accessible (either on PATH or via `COLMAP_BIN`).
@@ -82,7 +125,7 @@ COLMAP_BIN=colmap
 
 The pipeline creates `database.db` and outputs `cameras.txt`, `images.txt`, and `points3D.txt` under `data/tasks/{id}/interim/colmap/sparse`.
 
-## 3) 3DGS
+## 4) 3DGS
 
 Required:
 - A working 3DGS training script.
@@ -108,7 +151,22 @@ The in-repository pipeline currently standardizes two output targets for multi-i
 - `point_cloud.ply`
 - `scene.splat`
 
-## 4) Repository setup
+## 5) Multi-image route selection
+
+By default, multi-image uploads run VGGT and complete with `.ply`, `.npz`, and preview `.png` outputs.
+
+To keep testing the previous COLMAP -> 3DGS chain, set:
+
+```
+MULTI_IMAGE_PIPELINE=colmap_3dgs
+```
+
+That route still standardizes two output targets for multi-image tasks:
+
+- `point_cloud.ply`
+- `scene.splat`
+
+## 6) Repository setup
 
 After cloning the repository, initialize third-party dependencies:
 
@@ -116,7 +174,7 @@ After cloning the repository, initialize third-party dependencies:
 git submodule update --init --recursive
 ```
 
-## 5) Environment file
+## 7) Environment file
 
 Add these to `backend/.env` (see `backend/.env.example`).
 
@@ -133,7 +191,7 @@ MAX_IMAGE_LONG_EDGE=1920
 
 Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. A task can upload at most 8 images, and each image must fit within the 1080p limit.
 
-## 6) Pipeline extension point
+## 8) Pipeline extension point
 
 New reconstruction or inference methods should be added under `backend/pipelines/{method}/pipeline.py` and registered in `backend/pipelines/registry.py`.
 
@@ -148,7 +206,7 @@ The shared worker entry point is:
 python backend/workers/run_pipeline.py --pipeline triposr --task-id demo --input-dir ... --interim-dir ... --output-dir ... --logs-path ...
 ```
 
-## 7) Environment audit
+## 9) Environment audit
 
 Use this local audit before running real pipeline tests:
 
@@ -156,4 +214,4 @@ Use this local audit before running real pipeline tests:
 .\.venv\Scripts\python.exe scripts/audit_pipeline_env.py
 ```
 
-The audit reports TripoSR, COLMAP, and 3DGS environment status. TripoSR is expected to have CUDA-capable PyTorch. COLMAP and 3DGS may need additional platform-specific dependency work before their real smoke tests can pass.
+The audit reports TripoSR, VGGT, COLMAP, and 3DGS environment status. TripoSR and VGGT are expected to have CUDA-capable PyTorch. COLMAP and 3DGS may need additional platform-specific dependency work before their real smoke tests can pass.

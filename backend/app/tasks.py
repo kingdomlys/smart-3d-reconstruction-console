@@ -132,6 +132,10 @@ def _get_worker_python() -> str:
     return str(Path(sys.executable))
 
 
+def _multi_image_pipeline() -> str:
+    return os.getenv("MULTI_IMAGE_PIPELINE", "vggt").strip().lower() or "vggt"
+
+
 def _task_output_payload(task_id: str, output_path: Path) -> dict:
     outputs = list_output_files(task_id)
     output_types = sorted({item["type"] for item in outputs})
@@ -268,6 +272,17 @@ async def _run_3dgs_worker(task_id: str, mode: str, on_event: callable) -> Path:
     return output_path
 
 
+async def _run_vggt_worker(task_id: str, mode: str, on_event: callable) -> Path:
+    _raise_if_canceled(task_id)
+    await _run_pipeline_worker(task_id, "vggt", mode, on_event)
+    _raise_if_canceled(task_id)
+    outputs_dir = Path(ensure_task_dirs(task_id)["outputs_dir"])
+    ply_outputs = sorted(outputs_dir.glob("*.ply"))
+    if not ply_outputs:
+        raise RuntimeError("VGGT pipeline did not produce a PLY point cloud")
+    return ply_outputs[0]
+
+
 async def task_worker() -> None:
     while True:
         task_id = await TASK_QUEUE.queue.get()
@@ -301,19 +316,29 @@ async def task_worker() -> None:
                 _append_log(task_id, "Task completed")
                 logger.info("Task completed", extra={"task_id": task_id})
             else:
-                await TASK_QUEUE.broadcast(
-                    task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
-                )
-
                 async def on_event(payload: dict) -> None:
                     await TASK_QUEUE.broadcast(task_id, payload)
 
-                await _run_colmap_worker(task_id, task["mode"], on_event)
-                _raise_if_canceled(task_id)
-                await TASK_QUEUE.broadcast(
-                    task_id, {"status": "Running", "step": "3DGS", "progress": 0.7}
-                )
-                output_path = await _run_3dgs_worker(task_id, task["mode"], on_event)
+                selected_multi_pipeline = _multi_image_pipeline()
+                if selected_multi_pipeline == "vggt":
+                    await TASK_QUEUE.broadcast(
+                        task_id, {"status": "Running", "step": "VGGT", "progress": 0.1}
+                    )
+                    output_path = await _run_vggt_worker(task_id, task["mode"], on_event)
+                elif selected_multi_pipeline in {"colmap_3dgs", "colmap+3dgs", "legacy"}:
+                    await TASK_QUEUE.broadcast(
+                        task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
+                    )
+                    await _run_colmap_worker(task_id, task["mode"], on_event)
+                    _raise_if_canceled(task_id)
+                    await TASK_QUEUE.broadcast(
+                        task_id, {"status": "Running", "step": "3DGS", "progress": 0.7}
+                    )
+                    output_path = await _run_3dgs_worker(task_id, task["mode"], on_event)
+                else:
+                    raise ValueError(
+                        "MULTI_IMAGE_PIPELINE must be 'vggt' or 'colmap_3dgs'"
+                    )
                 _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))

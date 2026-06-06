@@ -44,8 +44,8 @@ def main() -> int:
 
     if select_pipeline(image_count=1, mode="fast").id != "triposr":
         raise AssertionError("single-image route should select triposr")
-    if select_pipeline(image_count=2, mode="fast").id != "colmap":
-        raise AssertionError("multi-image first route should select colmap")
+    if select_pipeline(image_count=2, mode="fast").id != "vggt":
+        raise AssertionError("multi-image first route should select vggt")
 
     with TemporaryDirectory() as tmp:
         root = Path(tmp)

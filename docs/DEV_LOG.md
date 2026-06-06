@@ -43,3 +43,5 @@
 - Added pipeline environment audit script for TripoSR, COLMAP, and 3DGS readiness checks.
 - Environment audit result: TripoSR CUDA runtime is OK on RTX 4060 Laptop; COLMAP conda executable currently exits with `3221225781`; `gs_env` currently lacks Torch/3DGS CUDA extensions.
 - Verification: TripoSR real smoke, TripoSR control-plane real smoke, pipeline environment audit, backend smoke checks, and frontend `npm run build` passed where applicable.
+- Integrated VGGT as the default multi-image route while preserving the legacy COLMAP -> 3DGS route behind `MULTI_IMAGE_PIPELINE=colmap_3dgs`.
+- Added VGGT pipeline diagnostics, environment examples, output discovery for preview PNGs, a fake-route smoke, and a real control-plane smoke that delegates inference to the `vggt` conda environment.

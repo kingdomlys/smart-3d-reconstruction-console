@@ -7,7 +7,7 @@ from typing import BinaryIO, List, Protocol
 from .settings import SETTINGS
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
-OUTPUT_EXTENSIONS = {".glb", ".ply", ".splat", ".zip", ".txt", ".json", ".bin", ".npz"}
+OUTPUT_EXTENSIONS = {".glb", ".ply", ".splat", ".zip", ".txt", ".json", ".bin", ".npz", ".png"}
 
 
 class UploadFileLike(Protocol):
