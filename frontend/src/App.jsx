@@ -30,6 +30,16 @@ function formatLimit(bytes) {
   return formatSize(bytes);
 }
 
+function formatPixels(pixels) {
+  if (!pixels) {
+    return "-";
+  }
+  if (pixels >= 1000 * 1000) {
+    return `${(pixels / (1000 * 1000)).toFixed(1)} MP`;
+  }
+  return `${pixels.toLocaleString()} px`;
+}
+
 function selectPreviewOutput(items) {
   for (const type of PREVIEW_TYPE_PRIORITY) {
     const match = items.find((item) => item.type === type);
@@ -43,6 +53,10 @@ function selectPreviewOutput(items) {
 function supportsPipeline(pipeline, imageCount) {
   if (!pipeline || imageCount < 1) {
     return false;
+  }
+  const limits = pipeline.limits;
+  if (limits) {
+    return imageCount >= limits.min_upload_files && imageCount <= limits.max_upload_files;
   }
   if (pipeline.id === "triposr") {
     return imageCount === 1;
@@ -62,6 +76,19 @@ function defaultPipelineId(imageCount, availablePipelines) {
     return preferred;
   }
   return availablePipelines[0]?.id || "";
+}
+
+function formatPipelineLimits(limits) {
+  if (!limits) {
+    return "";
+  }
+  const range =
+    limits.min_upload_files === limits.max_upload_files
+      ? `${limits.max_upload_files} image`
+      : `${limits.min_upload_files}-${limits.max_upload_files} images`;
+  return `${range}, ${formatLimit(limits.max_upload_bytes)} per file, ${formatPixels(
+    limits.max_image_pixels
+  )} per image, ${formatPixels(limits.max_total_image_pixels)} total`;
 }
 
 export default function App() {
@@ -91,6 +118,10 @@ export default function App() {
   );
   const selectedTask = tasks.find((task) => task.id === taskId);
   const activePipelineId = selectedTask ? selectedTask.pipeline_id : submittedPipeline || selectedPipeline;
+  const selectedPipelineDetails = useMemo(
+    () => (pipelineDiagnostics?.items || []).find((pipeline) => pipeline.id === selectedPipeline),
+    [pipelineDiagnostics, selectedPipeline]
+  );
   const supportsExplicitPipelineSelection =
     pipelineDiagnostics?.features?.explicit_pipeline_selection === true;
   const canRetry =
@@ -396,6 +427,9 @@ export default function App() {
             </div>
             <button type="submit">Start Task</button>
           </form>
+          {selectedPipelineDetails?.limits && (
+            <p className="limit-hint">{formatPipelineLimits(selectedPipelineDetails.limits)}</p>
+          )}
           <div className="meta">
             <p>Task ID: {taskId || "-"}</p>
             <p>Pipeline: {activePipelineId ? PIPELINE_LABELS[activePipelineId] || activePipelineId : "-"}</p>
@@ -417,7 +451,7 @@ export default function App() {
           <div className="system-meta">
             <p>Tasks root: {pipelineDiagnostics?.tasks_root || "-"}</p>
             <p>
-              Uploads: up to {pipelineDiagnostics?.limits?.max_upload_files || "-"} images,{" "}
+              Uploads: up to {pipelineDiagnostics?.limits?.max_supported_upload_files || "-"} images,{" "}
               {formatLimit(pipelineDiagnostics?.limits?.max_upload_bytes)} per file,{" "}
               {pipelineDiagnostics?.limits?.max_image_long_edge || "-"} px long edge
             </p>
@@ -435,6 +469,7 @@ export default function App() {
                   </span>
                   <span className="pipeline-types">{pipeline.output_types.join(", ")}</span>
                 </div>
+                {pipeline.limits && <p>{formatPipelineLimits(pipeline.limits)}</p>}
                 {!pipeline.ready && pipeline.missing_env?.length > 0 && (
                   <p>Missing: {pipeline.missing_env.slice(0, 2).join(", ")}</p>
                 )}

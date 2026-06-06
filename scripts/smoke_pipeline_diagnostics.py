@@ -16,6 +16,9 @@ def main() -> int:
         os.environ["TRIPOSR_ALLOW_PLACEHOLDER"] = "1"
         os.environ["VGGT_PY"] = "secret-vggt-python"
         os.environ["COLMAP_BIN"] = "secret-colmap-bin"
+        os.environ["VGGT_MAX_IMAGES"] = "16"
+        os.environ["COLMAP_MAX_UPLOAD_FILES"] = "32"
+        os.environ["COLMAP_MAX_TOTAL_IMAGE_PIXELS"] = str(32 * 1280 * 720)
 
         from fastapi.testclient import TestClient
 
@@ -43,6 +46,10 @@ def main() -> int:
         assert payload["features"]["explicit_pipeline_selection"] is True
         assert payload["limits"]["max_upload_files"] == 16
         assert payload["limits"]["max_upload_bytes"] == 20 * 1024 * 1024
+        assert payload["limits"]["max_supported_upload_files"] == 32
+        assert items["vggt"]["limits"]["max_upload_files"] == 16
+        assert items["colmap"]["limits"]["max_upload_files"] == 32
+        assert items["colmap"]["limits"]["max_total_image_pixels"] == 32 * 1280 * 720
 
     print("pipeline diagnostics smoke test passed")
     return 0

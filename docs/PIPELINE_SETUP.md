@@ -135,7 +135,21 @@ The pipeline runs feature extraction, exhaustive matching, sparse mapping, and t
 
 `colmap/sparse.ply` is the previewable sparse point cloud exported from the mapper output and is used as the primary task output. Dense outputs such as `dense/0/fused.ply` require COLMAP undistortion, stereo matching, stereo fusion, and optional meshing; those steps are not part of the default `COLMAP Sparse` route yet.
 
+Sparse reconstruction keeps only triangulated feature tracks that COLMAP can match across views. A sparse PLY can therefore look dispersed or incomplete even when COLMAP succeeded. Dense reconstruction is the later multi-view-stereo stage that estimates many more surface points and writes `fused.ply`; the current runtime route does not execute that dense stage yet.
+
 COLMAP requires images from the same static scene or object with enough overlap, stable lighting, visible texture, and moderate viewpoint changes. If images are unrelated, too sparse, blurred, reflective, mostly background, or taken from very large viewpoint jumps, sparse reconstruction can fail with `no_initial_pair` or `bad_initial_pair`. In that case, COLMAP ran correctly but could not initialize geometry from the inputs.
+
+COLMAP upload budget defaults are designed for an 8 GB VRAM target:
+
+```
+COLMAP_MAX_UPLOAD_FILES=32
+COLMAP_MAX_TOTAL_IMAGE_PIXELS=29491200
+COLMAP_MAX_IMAGE_PIXELS=2073600
+COLMAP_MAX_IMAGE_LONG_EDGE=1920
+COLMAP_TARGET_VRAM_GB=8
+```
+
+The default total-pixel budget is `32 * 1280 * 720`, so 32 small images are accepted while 32 full 1080p images are rejected unless the budget is explicitly raised. COLMAP memory use also depends on detected features, image texture, GPU SIFT settings, and exhaustive matching pairs, so `COLMAP_MAX_NUM_FEATURES` remains an important cap.
 
 Tunable defaults:
 
@@ -224,11 +238,13 @@ TASKS_ROOT=./data/tasks
 MAX_UPLOAD_FILES=16
 MAX_IMAGE_PIXELS=2073600
 MAX_IMAGE_LONG_EDGE=1920
+COLMAP_MAX_UPLOAD_FILES=32
+COLMAP_MAX_TOTAL_IMAGE_PIXELS=29491200
 ```
 
 `TASKS_ROOT` may be absolute or relative to the repository root. It controls where generated task artifacts are stored. The backend validates that this directory is writable on startup.
 
-Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. A task can upload at most 16 images, and each image must fit within the 1080p limit.
+Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. Default multi-image VGGT tasks can upload at most 16 images. Explicit COLMAP Sparse tasks can upload up to 32 images, but the total pixel budget must also fit the COLMAP limit.
 
 ## 8) Pipeline extension point
 

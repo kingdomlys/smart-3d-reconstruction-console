@@ -26,6 +26,9 @@ def main() -> int:
         tmp_root = Path(tmp)
         os.environ["TASKS_ROOT"] = str(tmp_root / "tasks")
         os.environ["TRIPOSR_ALLOW_PLACEHOLDER"] = "1"
+        os.environ["VGGT_MAX_IMAGES"] = "16"
+        os.environ["COLMAP_MAX_UPLOAD_FILES"] = "32"
+        os.environ["COLMAP_MAX_TOTAL_IMAGE_PIXELS"] = str(32 * 1280 * 720)
 
         from fastapi.testclient import TestClient
 
@@ -44,10 +47,15 @@ def main() -> int:
             payload = config.json()
             assert payload["max_upload_files"] == 16
             assert payload["max_upload_bytes"] == 20 * 1024 * 1024
+            assert payload["max_supported_upload_files"] == 32
 
             pipelines = client.get("/api/pipelines")
             assert pipelines.status_code == 200, pipelines.text
-            assert len(pipelines.json()["items"]) == 3
+            pipeline_payload = pipelines.json()
+            assert len(pipeline_payload["items"]) == 3
+            pipeline_limits = {item["id"]: item["limits"] for item in pipeline_payload["items"]}
+            assert pipeline_limits["vggt"]["max_upload_files"] == 16
+            assert pipeline_limits["colmap"]["max_upload_files"] == 32
 
             response = client.post(
                 "/api/tasks",
@@ -149,6 +157,30 @@ def main() -> int:
                     data={"pipeline": "colmap"},
                     files=[("files", ("bad-colmap.png", make_image(), "image/png"))],
                 )
+                vggt_too_many = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "vggt"},
+                    files=[
+                        ("files", (f"vggt-too-many-{index}.png", make_image(), "image/png"))
+                        for index in range(17)
+                    ],
+                )
+                colmap_32 = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap"},
+                    files=[
+                        ("files", (f"colmap-32-{index}.png", make_image(), "image/png"))
+                        for index in range(32)
+                    ],
+                )
+                colmap_33 = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap"},
+                    files=[
+                        ("files", (f"colmap-33-{index}.png", make_image(), "image/png"))
+                        for index in range(33)
+                    ],
+                )
             finally:
                 TASK_QUEUE.enqueue = original_enqueue
 
@@ -162,6 +194,14 @@ def main() -> int:
             assert multi_colmap.json()["pipeline_id"] == "colmap"
             assert invalid_colmap.status_code == 400, invalid_colmap.text
             assert invalid_colmap.json()["detail"]["error"] == "Pipeline does not support this upload"
+            assert vggt_too_many.status_code == 400, vggt_too_many.text
+            assert vggt_too_many.json()["detail"]["error"] == "Too many files"
+            assert vggt_too_many.json()["detail"]["pipeline"] == "vggt"
+            assert colmap_32.status_code == 200, colmap_32.text
+            assert colmap_32.json()["pipeline_id"] == "colmap"
+            assert colmap_33.status_code == 400, colmap_33.text
+            assert colmap_33.json()["detail"]["error"] == "Too many files"
+            assert colmap_33.json()["detail"]["pipeline"] == "colmap"
 
     print("api smoke test passed")
     return 0

@@ -26,6 +26,7 @@ from .storage import (
     validate_uploads,
 )
 from .tasks import TASK_QUEUE, cancel_task, task_worker
+from .upload_limits import limits_for_pipeline
 
 app = FastAPI(title="3D Reconstruction Control Plane")
 logger = logging.getLogger("control_plane")
@@ -62,12 +63,19 @@ async def startup_event() -> None:
 
 @app.get("/api/config")
 async def get_config() -> dict:
+    default_limits = limits_for_pipeline("vggt")
+    colmap_limits = limits_for_pipeline("colmap")
     return {
         "tasks_root": str(SETTINGS.tasks_root),
-        "max_upload_files": SETTINGS.max_upload_files,
-        "max_upload_bytes": SETTINGS.max_upload_bytes,
-        "max_image_pixels": SETTINGS.max_image_pixels,
-        "max_image_long_edge": SETTINGS.max_image_long_edge,
+        "max_upload_files": default_limits.max_upload_files,
+        "max_upload_bytes": default_limits.max_upload_bytes,
+        "max_image_pixels": default_limits.max_image_pixels,
+        "max_image_long_edge": default_limits.max_image_long_edge,
+        "max_supported_upload_files": max(
+            limits_for_pipeline("triposr").max_upload_files,
+            default_limits.max_upload_files,
+            colmap_limits.max_upload_files,
+        ),
     }
 
 
@@ -100,12 +108,11 @@ async def create_task_endpoint(
             detail={"error": "Empty filename detected", "hint": "Check file names"},
         )
 
+    pipeline_id = _select_task_pipeline(len(files), mode, pipeline)
     try:
-        validate_uploads(files)
+        validate_uploads(files, limits_for_pipeline(pipeline_id))
     except UploadValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
-
-    pipeline_id = _select_task_pipeline(len(files), mode, pipeline)
 
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)

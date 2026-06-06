@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import BinaryIO, List, Protocol
 
 from .settings import SETTINGS
+from .upload_limits import UploadLimits
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 OUTPUT_EXTENSIONS = {".glb", ".ply", ".splat", ".zip", ".txt", ".json", ".bin", ".npz", ".png", ".db"}
@@ -163,12 +164,36 @@ def _upload_size(upload: UploadFileLike) -> int:
     return size
 
 
-def validate_uploads(files: List[UploadFileLike]) -> None:
-    if len(files) > SETTINGS.max_upload_files:
+def _default_upload_limits() -> UploadLimits:
+    return UploadLimits(
+        pipeline_id="default",
+        min_upload_files=1,
+        max_upload_files=SETTINGS.max_upload_files,
+        max_upload_bytes=SETTINGS.max_upload_bytes,
+        max_image_pixels=SETTINGS.max_image_pixels,
+        max_image_long_edge=SETTINGS.max_image_long_edge,
+        max_total_image_pixels=SETTINGS.max_upload_files * SETTINGS.max_image_pixels,
+    )
+
+
+def validate_uploads(files: List[UploadFileLike], limits: UploadLimits | None = None) -> None:
+    selected_limits = limits or _default_upload_limits()
+    if len(files) < selected_limits.min_upload_files:
+        raise UploadValidationError(
+            {
+                "error": "Not enough files",
+                "pipeline": selected_limits.pipeline_id,
+                "min_files": selected_limits.min_upload_files,
+                "received": len(files),
+            }
+        )
+
+    if len(files) > selected_limits.max_upload_files:
         raise UploadValidationError(
             {
                 "error": "Too many files",
-                "max_files": SETTINGS.max_upload_files,
+                "pipeline": selected_limits.pipeline_id,
+                "max_files": selected_limits.max_upload_files,
                 "received": len(files),
             }
         )
@@ -190,7 +215,7 @@ def validate_uploads(files: List[UploadFileLike]) -> None:
     oversize_uploads = []
     for upload in files:
         size = _upload_size(upload)
-        if size > SETTINGS.max_upload_bytes:
+        if size > selected_limits.max_upload_bytes:
             oversize_uploads.append(
                 {
                     "filename": upload.filename,
@@ -202,16 +227,31 @@ def validate_uploads(files: List[UploadFileLike]) -> None:
         raise UploadValidationError(
             {
                 "error": "Upload file exceeds size limit",
-                "max_bytes": SETTINGS.max_upload_bytes,
+                "pipeline": selected_limits.pipeline_id,
+                "max_bytes": selected_limits.max_upload_bytes,
                 "files": oversize_uploads,
             }
         )
 
     oversize_files = []
+    image_dimensions = []
+    total_pixels = 0
     for upload in files:
         width, height = _validate_image_dimensions(upload)
         pixels = width * height
-        if pixels > SETTINGS.max_image_pixels or max(width, height) > SETTINGS.max_image_long_edge:
+        total_pixels += pixels
+        image_dimensions.append(
+            {
+                "filename": upload.filename,
+                "width": width,
+                "height": height,
+                "pixels": pixels,
+            }
+        )
+        if (
+            pixels > selected_limits.max_image_pixels
+            or max(width, height) > selected_limits.max_image_long_edge
+        ):
             oversize_files.append(
                 {
                     "filename": upload.filename,
@@ -224,10 +264,30 @@ def validate_uploads(files: List[UploadFileLike]) -> None:
     if oversize_files:
         raise UploadValidationError(
             {
-                "error": "Image resolution exceeds 1080p limit",
-                "max_pixels": SETTINGS.max_image_pixels,
-                "max_long_edge": SETTINGS.max_image_long_edge,
+                "error": "Image resolution exceeds upload limit",
+                "pipeline": selected_limits.pipeline_id,
+                "max_pixels": selected_limits.max_image_pixels,
+                "max_long_edge": selected_limits.max_image_long_edge,
                 "files": oversize_files,
+            }
+        )
+
+    if (
+        selected_limits.max_total_image_pixels is not None
+        and total_pixels > selected_limits.max_total_image_pixels
+    ):
+        raise UploadValidationError(
+            {
+                "error": "Total image resolution exceeds pipeline budget",
+                "pipeline": selected_limits.pipeline_id,
+                "max_total_image_pixels": selected_limits.max_total_image_pixels,
+                "total_image_pixels": total_pixels,
+                "image_count": len(files),
+                "files": image_dimensions,
+                "hint": (
+                    "Use fewer images or downscale inputs before upload. "
+                    "This protects COLMAP feature extraction and matching memory."
+                ),
             }
         )
 

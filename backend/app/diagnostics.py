@@ -7,6 +7,7 @@ from typing import Any
 from backend.pipelines.registry import list_pipelines
 
 from .settings import BASE_DIR, SETTINGS
+from .upload_limits import limits_for_pipeline, limits_payload_for_pipelines
 
 
 PIPELINE_ENV_VARS = {
@@ -69,7 +70,8 @@ def _support_summary(pipeline_id: str) -> str:
 
 def get_pipeline_diagnostics() -> dict[str, Any]:
     items = []
-    for pipeline in list_pipelines():
+    pipelines = list_pipelines()
+    for pipeline in pipelines:
         env = [_configured_env(name) for name in PIPELINE_ENV_VARS.get(pipeline.id, [])]
         dependencies = {
             name: _dependency_status(path)
@@ -94,9 +96,12 @@ def get_pipeline_diagnostics() -> dict[str, Any]:
                 "placeholder_enabled": placeholder_enabled,
                 "ready": bool(configured_env) or placeholder_enabled,
                 "hint": PIPELINE_HINTS.get(pipeline.id, "Register required environment variables."),
+                "limits": limits_for_pipeline(pipeline.id).to_payload(),
             }
         )
 
+    pipeline_ids = [pipeline.id for pipeline in pipelines]
+    pipeline_limits = limits_payload_for_pipelines(pipeline_ids)
     return {
         "items": items,
         "tasks_root": str(SETTINGS.tasks_root),
@@ -108,5 +113,11 @@ def get_pipeline_diagnostics() -> dict[str, Any]:
             "max_upload_bytes": SETTINGS.max_upload_bytes,
             "max_image_pixels": SETTINGS.max_image_pixels,
             "max_image_long_edge": SETTINGS.max_image_long_edge,
+            "pipelines": pipeline_limits,
+            "max_supported_upload_files": max(
+                limit["max_upload_files"] for limit in pipeline_limits.values()
+            )
+            if pipeline_limits
+            else SETTINGS.max_upload_files,
         },
     }
