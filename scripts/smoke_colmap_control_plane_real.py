@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from backend.app import db
+from backend.pipelines.colmap.pipeline import _ply_vertex_count
 
 
 def _default_colmap_bin() -> Path:
@@ -79,6 +80,8 @@ async def main_async() -> None:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             assert summary["registered_image_count"] >= 2, summary
             assert summary["point_count"] > 0, summary
+            assert _ply_vertex_count(output_path) == summary["point_count"], output_path
+            assert output_path.stat().st_size > 1024, output_path.stat().st_size
 
             outputs = storage_module.list_output_files(task_id)
             relative_paths = {item["relative_path"] for item in outputs}

@@ -94,7 +94,7 @@ class ColmapPipeline:
         missing_text = [name for name in TEXT_MODEL_FILES if not (sparse_text_dir / name).exists()]
         if missing_text:
             raise RuntimeError(f"COLMAP sparse text output missing: {', '.join(missing_text)}")
-        if not sparse_ply_path.exists() or sparse_ply_path.stat().st_size == 0:
+        if not sparse_ply_path.exists() or _ply_vertex_count(sparse_ply_path) == 0:
             raise RuntimeError("COLMAP did not produce sparse.ply")
         if not summary_path.exists():
             raise RuntimeError("COLMAP did not produce summary.json")
@@ -146,6 +146,20 @@ def _tail(text: str, max_chars: int = 4000) -> str:
     if len(text) <= max_chars:
         return text
     return "[truncated]\n" + text[-max_chars:]
+
+
+def _ply_vertex_count(path: Path) -> int:
+    with path.open("rb") as file:
+        for raw_line in file:
+            line = raw_line.decode("ascii", errors="ignore").strip()
+            if line.startswith("element vertex "):
+                try:
+                    return int(line.rsplit(" ", 1)[-1])
+                except ValueError:
+                    return 0
+            if line == "end_header":
+                return 0
+    return 0
 
 
 def _classify_failure(output: str) -> str:

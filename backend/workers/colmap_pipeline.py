@@ -87,6 +87,47 @@ def _count_text_rows(path: Path) -> int:
     return count
 
 
+def _points3d_rows(path: Path) -> list[tuple[float, float, float, int, int, int]]:
+    rows: list[tuple[float, float, float, int, int, int]] = []
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 7:
+            continue
+        rows.append(
+            (
+                float(parts[1]),
+                float(parts[2]),
+                float(parts[3]),
+                int(parts[4]),
+                int(parts[5]),
+                int(parts[6]),
+            )
+        )
+    return rows
+
+
+def _write_sparse_ply(points_txt: Path, output_path: Path) -> int:
+    rows = _points3d_rows(points_txt)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="ascii", newline="\n") as file:
+        file.write("ply\n")
+        file.write("format ascii 1.0\n")
+        file.write(f"element vertex {len(rows)}\n")
+        file.write("property float x\n")
+        file.write("property float y\n")
+        file.write("property float z\n")
+        file.write("property uchar red\n")
+        file.write("property uchar green\n")
+        file.write("property uchar blue\n")
+        file.write("end_header\n")
+        for x, y, z, r, g, b in rows:
+            file.write(f"{x:.9g} {y:.9g} {z:.9g} {r} {g} {b}\n")
+    return len(rows)
+
+
 def _registered_image_count(images_txt: Path) -> int:
     return _count_text_rows(images_txt) // 2
 
@@ -218,23 +259,13 @@ def main() -> int:
         "--output_type",
         "TXT",
     ], "model_conversion", env)
-    sparse_ply_path = workspace / SPARSE_PLY_NAME
-    _run([
-        colmap,
-        "model_converter",
-        "--input_path",
-        str(sparse_model_dir),
-        "--output_path",
-        str(sparse_ply_path),
-        "--output_type",
-        "PLY",
-    ], "ply_export", env)
-
     missing_text = [name for name in TEXT_MODEL_FILES if not (sparse_txt_dir / name).exists()]
     if missing_text:
         raise RuntimeError(f"missing_sparse_text: {', '.join(missing_text)}")
-    if not sparse_ply_path.exists() or sparse_ply_path.stat().st_size == 0:
-        raise RuntimeError("missing_sparse_ply: COLMAP did not export sparse.ply")
+    sparse_ply_path = workspace / SPARSE_PLY_NAME
+    sparse_ply_point_count = _write_sparse_ply(sparse_txt_dir / "points3D.txt", sparse_ply_path)
+    if sparse_ply_point_count == 0:
+        raise RuntimeError("missing_sparse_ply: COLMAP produced no sparse points for sparse.ply")
 
     summary = _write_summary(summary_path, input_dir, db_path, sparse_model_dir, sparse_txt_dir, sparse_ply_path)
     if summary["registered_image_count"] < 2:
