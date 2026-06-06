@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from io import BytesIO
@@ -19,6 +20,8 @@ def write_image(path: Path) -> None:
 
 
 def main() -> int:
+    os.environ["TRIPOSR_ALLOW_PLACEHOLDER"] = "1"
+
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
         inputs_dir = root / "inputs"
@@ -46,7 +49,8 @@ def main() -> int:
             "--logs-path",
             str(root / "logs.txt"),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        env = os.environ.copy()
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
         if result.returncode != 0:
             print(result.stdout)
             print(result.stderr)

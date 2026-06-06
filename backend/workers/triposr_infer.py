@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -19,15 +20,18 @@ def main() -> int:
     output_path = Path(args.output_path).resolve()
 
     repo_root = Path(os.getenv("TRIPOSR_REPO", "third_party/TripoSR")).resolve()
+    project_root = Path(__file__).resolve().parents[2]
+    compat_root = project_root / "backend" / "compat"
     run_script = repo_root / "run.py"
     if not run_script.exists():
         raise FileNotFoundError(f"TripoSR run.py not found: {run_script}")
 
     output_dir = output_path.parent / "tripo_output"
     output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "0").mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "python",
+        sys.executable,
         str(run_script),
         str(input_path),
         "--output-dir",
@@ -41,9 +45,16 @@ def main() -> int:
     if device:
         cmd += ["--device", device]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    env = os.environ.copy()
+    pythonpath_parts = [str(compat_root), str(repo_root)]
+    if env.get("PYTHONPATH"):
+        pythonpath_parts.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr or "TripoSR run failed")
+        details = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        raise RuntimeError(details or "TripoSR run failed")
 
     candidates = list(output_dir.rglob("mesh.glb"))
     if not candidates:

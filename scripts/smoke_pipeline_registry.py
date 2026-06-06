@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -39,6 +40,8 @@ def make_context(root: Path, pipeline_id: str) -> PipelineContext:
 
 
 def main() -> int:
+    os.environ["TRIPOSR_ALLOW_PLACEHOLDER"] = "1"
+
     if select_pipeline(image_count=1, mode="fast").id != "triposr":
         raise AssertionError("single-image route should select triposr")
     if select_pipeline(image_count=2, mode="fast").id != "colmap":

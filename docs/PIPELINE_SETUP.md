@@ -7,6 +7,7 @@ This project ships in-repository pipeline implementations for TripoSR, COLMAP, a
 Required:
 - A TripoSR inference entry point you can call from CLI.
 - Optional: `rembg` for background removal.
+- CUDA-capable PyTorch in the TripoSR environment.
 
 Recommended setup:
 1. Create a conda env for TripoSR.
@@ -27,6 +28,29 @@ USE_REMBG=1
 ```
 
 The backend will append `input_path` and `output_path` to `TRIPOSR_CMD`. This command is called from `backend/pipelines/triposr/pipeline.py`.
+
+If `TRIPOSR_CMD` is not set, the TripoSR pipeline defaults to the in-repository wrapper:
+
+```
+python backend/workers/triposr_infer.py
+```
+
+For local placeholder-only smoke tests, set:
+
+```
+TRIPOSR_ALLOW_PLACEHOLDER=1
+```
+
+Windows notes:
+
+- `torchmcubes` may fail to build without Visual Studio C++ build tools. The project provides a local compatibility module at `backend/compat/torchmcubes.py`, and `backend/workers/triposr_infer.py` injects it through `PYTHONPATH`.
+- `trimesh==4.0.5` is not compatible with NumPy 2.x for GLB export. Use `numpy<2` in `tripo_env`.
+
+Verified smoke command:
+
+```
+conda run -n tripo_env python scripts/smoke_triposr_real.py
+```
 
 ## 2) COLMAP
 

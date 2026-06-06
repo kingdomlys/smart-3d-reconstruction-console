@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from backend.pipelines.base import PipelineResult
@@ -78,7 +79,7 @@ class TripoSRPipeline:
         output_path: Path,
         context: PipelineContext,
     ) -> str | None:
-        cmd = os.getenv("TRIPOSR_CMD")
+        cmd = os.getenv("TRIPOSR_CMD") or self._default_tripo_cmd()
         if not cmd:
             return None
 
@@ -90,5 +91,12 @@ class TripoSRPipeline:
         if result.stderr:
             context.emit({"status": "Running", "step": "tripo", "progress": 0.6, "stderr": result.stderr})
         if result.returncode != 0:
-            raise RuntimeError("TRIPOSR_CMD failed")
+            details = "\n".join(part for part in (result.stdout, result.stderr) if part)
+            raise RuntimeError(details or "TripoSR command failed")
         return cmd
+
+    def _default_tripo_cmd(self) -> str | None:
+        if os.getenv("TRIPOSR_ALLOW_PLACEHOLDER", "0") == "1":
+            return None
+        script_path = Path(__file__).resolve().parents[2] / "workers" / "triposr_infer.py"
+        return f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))}"
