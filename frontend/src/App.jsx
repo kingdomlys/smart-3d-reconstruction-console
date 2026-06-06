@@ -46,6 +46,8 @@ export default function App() {
   const selectedTask = tasks.find((task) => task.id === taskId);
   const canRetry =
     taskId && selectedTask && !["Pending", "Running"].includes(selectedTask.status);
+  const canCancel =
+    taskId && selectedTask && ["Pending", "Running"].includes(selectedTask.status);
 
   useEffect(() => {
     if (!taskId) {
@@ -179,6 +181,25 @@ export default function App() {
     await loadTasks();
   }
 
+  async function cancelTask() {
+    if (!taskId) {
+      return;
+    }
+    const response = await fetch(`${apiBase}/api/tasks/${taskId}/cancel`, {
+      method: "POST"
+    });
+    if (!response.ok) {
+      const payload = await response.json();
+      setError(payload.detail || "Cancel failed");
+      return;
+    }
+    const payload = await response.json();
+    setStatus(payload.status || "Canceled");
+    setError(payload.error || "");
+    setOutputPath(payload.output_path || "");
+    await Promise.all([fetchLogs(taskId), loadTasks()]);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     if (!files.length) {
@@ -259,6 +280,9 @@ export default function App() {
               </button>
               <button type="button" className="ghost" onClick={retryTask} disabled={!canRetry}>
                 Retry
+              </button>
+              <button type="button" className="ghost danger" onClick={cancelTask} disabled={!canCancel}>
+                Cancel
               </button>
             </div>
           </div>

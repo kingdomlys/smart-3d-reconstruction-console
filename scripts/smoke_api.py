@@ -90,6 +90,28 @@ def main() -> int:
             assert retry.json()["status"] == "Pending"
             assert queued == [task_id]
 
+            cancel = client.post(f"/api/tasks/{task_id}/cancel")
+            assert cancel.status_code == 200, cancel.text
+            assert cancel.json()["status"] == "Canceled"
+
+            cancel_again = client.post(f"/api/tasks/{task_id}/cancel")
+            assert cancel_again.status_code == 409, cancel_again.text
+
+            TASK_QUEUE.cancel_requested.add(task_id)
+            try:
+                retry_during_cancel = client.post(f"/api/tasks/{task_id}/retry")
+            finally:
+                TASK_QUEUE.cancel_requested.discard(task_id)
+            assert retry_during_cancel.status_code == 409, retry_during_cancel.text
+
+            try:
+                TASK_QUEUE.enqueue = fake_enqueue
+                retry_after_cancel = client.post(f"/api/tasks/{task_id}/retry")
+            finally:
+                TASK_QUEUE.enqueue = original_enqueue
+            assert retry_after_cancel.status_code == 200, retry_after_cancel.text
+            assert retry_after_cancel.json()["status"] == "Pending"
+
     print("api smoke test passed")
     return 0
 

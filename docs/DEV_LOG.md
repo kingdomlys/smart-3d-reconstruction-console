@@ -26,3 +26,6 @@
 - Added frontend dependency lockfile and ignored local `node_modules`/`dist` artifacts.
 - Verification: backend API, upload validation, pipeline registry, worker entry, task observability, output asset smoke checks, and frontend `npm run build` passed.
 - Current environment note: `npm audit` reports 2 moderate dev-server advisories through Vite/esbuild; production dependency audit with `--omit=dev` is clean, and the available fix requires a breaking Vite upgrade.
+- Added task cancellation for Pending/Running jobs, including API cancellation, worker cancel checks, running subprocess termination, retry protection during cancellation cleanup, and frontend cancel action.
+- Added cancellation smoke coverage for active task termination and API conflict behavior.
+- Verification: backend API, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.

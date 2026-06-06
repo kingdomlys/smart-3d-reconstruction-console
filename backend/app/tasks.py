@@ -20,6 +20,8 @@ class TaskQueue:
     def __init__(self) -> None:
         self.queue: asyncio.Queue[str] = asyncio.Queue()
         self.subscribers: Dict[str, Set[WebSocket]] = {}
+        self.cancel_requested: Set[str] = set()
+        self.running_processes: Dict[str, asyncio.subprocess.Process] = {}
 
     async def enqueue(self, task_id: str) -> None:
         await self.queue.put(task_id)
@@ -41,8 +43,40 @@ class TaskQueue:
             except Exception:
                 await self.remove_subscriber(task_id, ws)
 
+    async def request_cancel(self, task_id: str) -> None:
+        self.cancel_requested.add(task_id)
+        process = self.running_processes.get(task_id)
+        if process and process.returncode is None:
+            process.terminate()
+
+    def clear_cancel(self, task_id: str) -> None:
+        self.cancel_requested.discard(task_id)
+
+    def is_cancel_requested(self, task_id: str) -> bool:
+        return task_id in self.cancel_requested
+
+    def is_cancellation_in_progress(self, task_id: str) -> bool:
+        return task_id in self.cancel_requested or task_id in self.running_processes
+
+    def set_running_process(self, task_id: str, process: asyncio.subprocess.Process) -> None:
+        self.running_processes[task_id] = process
+
+    def clear_running_process(self, task_id: str, process: asyncio.subprocess.Process) -> None:
+        if self.running_processes.get(task_id) is process:
+            self.running_processes.pop(task_id, None)
+
 
 TASK_QUEUE = TaskQueue()
+
+
+class TaskCanceled(RuntimeError):
+    pass
+
+
+def _raise_if_canceled(task_id: str) -> None:
+    task = get_task(task_id)
+    if TASK_QUEUE.is_cancel_requested(task_id) or (task and task["status"] == "Canceled"):
+        raise TaskCanceled("Task canceled by user")
 
 
 def _append_log(task_id: str, message: str) -> None:
@@ -73,6 +107,21 @@ def _task_output_payload(task_id: str, output_path: Path) -> dict:
         "outputs": outputs,
         "output_types": output_types,
     }
+
+
+async def cancel_task(task_id: str) -> dict:
+    task = get_task(task_id)
+    if not task:
+        raise KeyError(task_id)
+    if task["status"] not in {"Pending", "Running"}:
+        raise ValueError("Task is not active")
+
+    await TASK_QUEUE.request_cancel(task_id)
+    update_task(task_id, status="Canceled", output_path=task.get("output_path"), error="Canceled by user")
+    updated = get_task(task_id) or {}
+    _append_log(task_id, "Task canceled by user")
+    await TASK_QUEUE.broadcast(task_id, updated)
+    return updated
 
 
 async def _read_stream(
@@ -133,17 +182,25 @@ async def _run_pipeline_worker(
         stderr=asyncio.subprocess.PIPE,
     )
     assert process.stdout and process.stderr
-    await asyncio.gather(
-        _read_stream(process.stdout, task_id, f"{pipeline_id}:stdout", on_event, True),
-        _read_stream(process.stderr, task_id, f"{pipeline_id}:stderr"),
-    )
-    return_code = await process.wait()
+    TASK_QUEUE.set_running_process(task_id, process)
+    try:
+        await asyncio.gather(
+            _read_stream(process.stdout, task_id, f"{pipeline_id}:stdout", on_event, True),
+            _read_stream(process.stderr, task_id, f"{pipeline_id}:stderr"),
+        )
+        return_code = await process.wait()
+    finally:
+        TASK_QUEUE.clear_running_process(task_id, process)
+    if TASK_QUEUE.is_cancel_requested(task_id):
+        raise TaskCanceled("Task canceled by user")
     if return_code != 0:
         raise RuntimeError(f"{pipeline_id} pipeline failed")
 
 
 async def _run_tripo_worker(task_id: str, mode: str, on_event: callable) -> Path:
+    _raise_if_canceled(task_id)
     await _run_pipeline_worker(task_id, "triposr", mode, on_event)
+    _raise_if_canceled(task_id)
     output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "output.glb"
     if not output_path.exists():
         raise RuntimeError("TripoSR pipeline did not produce output.glb")
@@ -151,7 +208,9 @@ async def _run_tripo_worker(task_id: str, mode: str, on_event: callable) -> Path
 
 
 async def _run_colmap_worker(task_id: str, mode: str, on_event: callable) -> Path:
+    _raise_if_canceled(task_id)
     await _run_pipeline_worker(task_id, "colmap", mode, on_event)
+    _raise_if_canceled(task_id)
     sparse_dir = Path(ensure_task_dirs(task_id)["interim_dir"]) / "colmap" / "sparse"
     if not sparse_dir.exists():
         raise RuntimeError("COLMAP pipeline did not produce sparse output")
@@ -159,7 +218,9 @@ async def _run_colmap_worker(task_id: str, mode: str, on_event: callable) -> Pat
 
 
 async def _run_3dgs_worker(task_id: str, mode: str, on_event: callable) -> Path:
+    _raise_if_canceled(task_id)
     await _run_pipeline_worker(task_id, "gaussian_splatting", mode, on_event)
+    _raise_if_canceled(task_id)
     output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "point_cloud.ply"
     if not output_path.exists():
         raise RuntimeError("3DGS pipeline did not produce point_cloud.ply")
@@ -175,6 +236,10 @@ async def task_worker() -> None:
                 logger.error("Task not found", extra={"task_id": task_id})
                 TASK_QUEUE.queue.task_done()
                 continue
+            if task["status"] == "Canceled" or TASK_QUEUE.is_cancel_requested(task_id):
+                _append_log(task_id, "Canceled task skipped")
+                await TASK_QUEUE.broadcast(task_id, get_task(task_id) or {"status": "Canceled"})
+                continue
             logger.info("Task started", extra={"task_id": task_id})
             _append_log(task_id, "Task started")
             update_task(task_id, status="Running")
@@ -189,6 +254,7 @@ async def task_worker() -> None:
                     await TASK_QUEUE.broadcast(task_id, payload)
 
                 output_path = await _run_tripo_worker(task_id, task["mode"], on_event)
+                _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))
                 _append_log(task_id, "Task completed")
@@ -202,18 +268,27 @@ async def task_worker() -> None:
                     await TASK_QUEUE.broadcast(task_id, payload)
 
                 await _run_colmap_worker(task_id, task["mode"], on_event)
+                _raise_if_canceled(task_id)
                 await TASK_QUEUE.broadcast(
                     task_id, {"status": "Running", "step": "3DGS", "progress": 0.7}
                 )
                 output_path = await _run_3dgs_worker(task_id, task["mode"], on_event)
+                _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))
                 _append_log(task_id, "Task completed")
                 logger.info("Task completed", extra={"task_id": task_id})
+        except TaskCanceled as exc:
+            update_task(task_id, status="Canceled", output_path=None, error=str(exc))
+            updated = get_task(task_id) or {"status": "Canceled", "error": str(exc)}
+            await TASK_QUEUE.broadcast(task_id, updated)
+            _append_log(task_id, f"Task canceled: {exc}")
+            logger.info("Task canceled", extra={"task_id": task_id})
         except Exception as exc:
             update_task(task_id, status="Failed", error=str(exc))
             await TASK_QUEUE.broadcast(task_id, {"status": "Failed", "error": str(exc)})
             _append_log(task_id, f"Task failed: {exc}")
             logger.exception("Task failed", extra={"task_id": task_id})
         finally:
+            TASK_QUEUE.clear_cancel(task_id)
             TASK_QUEUE.queue.task_done()

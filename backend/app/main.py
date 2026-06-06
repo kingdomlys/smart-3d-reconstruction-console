@@ -23,7 +23,7 @@ from .storage import (
     save_uploads,
     validate_uploads,
 )
-from .tasks import TASK_QUEUE, task_worker
+from .tasks import TASK_QUEUE, cancel_task, task_worker
 
 app = FastAPI(title="3D Reconstruction Control Plane")
 logger = logging.getLogger("control_plane")
@@ -179,6 +179,8 @@ async def retry_task(task_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Task not found")
     if task["status"] in {"Pending", "Running"}:
         raise HTTPException(status_code=409, detail="Task is already active")
+    if TASK_QUEUE.is_cancellation_in_progress(task_id):
+        raise HTTPException(status_code=409, detail="Task cancellation is still in progress")
 
     dirs = ensure_task_dirs(task_id)
     input_files = [path for path in Path(dirs["inputs_dir"]).iterdir() if path.is_file()]
@@ -190,6 +192,16 @@ async def retry_task(task_id: str) -> dict:
     updated = get_task(task_id) or {}
     await TASK_QUEUE.broadcast(task_id, updated)
     return updated
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task_endpoint(task_id: str) -> dict:
+    try:
+        return await cancel_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.websocket("/ws/tasks/{task_id}")

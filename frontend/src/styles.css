@@ -161,6 +161,15 @@ button.ghost:hover {
   background: #eef2f7;
 }
 
+button.ghost.danger {
+  border-color: #f1b8b2;
+  color: var(--danger);
+}
+
+button.ghost.danger:hover {
+  background: #fff1f0;
+}
+
 .meta {
   margin-top: 14px;
   color: var(--muted);
