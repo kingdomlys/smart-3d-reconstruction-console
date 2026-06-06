@@ -14,56 +14,74 @@ from backend.pipelines.context import PipelineContext
 TEXT_MODEL_FILES = ("cameras.txt", "images.txt", "points3D.txt")
 RAW_MODEL_FILES = ("cameras.bin", "images.bin", "points3D.bin")
 SPARSE_PLY_NAME = "sparse.ply"
+DENSE_FUSED_NAME = "fused.ply"
 
 
 class ColmapPipeline:
     id = "colmap"
-    name = "COLMAP"
+    name = "COLMAP Sparse"
     output_types = ["ply", "colmap_sparse", "db", "json", "txt", "bin"]
+    workspace_name = "colmap"
+    output_root_name = "colmap"
+    dense = False
 
     def supports(self, image_count: int, mode: str) -> bool:
         return image_count > 1
 
     def run(self, context: PipelineContext) -> PipelineResult:
-        workspace = context.interim_dir / "colmap"
+        workspace = context.interim_dir / self.workspace_name
         sparse_dir = workspace / "sparse"
         sparse_text_dir = workspace / "sparse_txt"
         sparse_ply_path = workspace / SPARSE_PLY_NAME
+        dense_dir = workspace / "dense"
+        dense_ply_path = dense_dir / DENSE_FUSED_NAME
         summary_path = workspace / "summary.json"
         if not context.inputs_dir.exists():
             raise FileNotFoundError(f"Input dir not found: {context.inputs_dir}")
         workspace.mkdir(parents=True, exist_ok=True)
 
-        context.emit({"status": "Running", "step": "colmap", "progress": 0.2})
+        step = "colmap_dense" if self.dense else "colmap"
+        context.emit({"status": "Running", "step": step, "progress": 0.2})
         args = self._command() + [
             "--input-dir",
             str(context.inputs_dir),
             "--output-dir",
             str(workspace),
         ]
+        if self.dense:
+            args.append("--dense")
         result = subprocess.run(args, capture_output=True, text=True, check=False)
         if result.stdout:
             context.log(result.stdout)
-            context.emit({"status": "Running", "step": "colmap", "progress": 0.4, "stdout": _tail(result.stdout)})
+            context.emit({"status": "Running", "step": step, "progress": 0.4, "stdout": _tail(result.stdout)})
         if result.stderr:
             context.log(result.stderr)
-            context.emit({"status": "Running", "step": "colmap", "progress": 0.4, "stderr": _tail(result.stderr)})
+            context.emit({"status": "Running", "step": step, "progress": 0.4, "stderr": _tail(result.stderr)})
         if result.returncode != 0:
             details = "\n".join(part for part in (result.stdout, result.stderr) if part)
             failure = _classify_failure(details)
             raise RuntimeError(f"COLMAP {failure}: {_failure_hint(failure)}\n{_tail(details)}")
 
-        self._validate_outputs(workspace, sparse_dir, sparse_text_dir, sparse_ply_path, summary_path)
+        self._validate_outputs(
+            workspace,
+            sparse_dir,
+            sparse_text_dir,
+            sparse_ply_path,
+            summary_path,
+            dense_ply_path,
+        )
         outputs = self._copy_outputs(
             context.outputs_dir,
             workspace,
             sparse_dir,
             sparse_text_dir,
             sparse_ply_path,
+            dense_dir,
+            dense_ply_path,
             summary_path,
         )
 
-        context.emit({"status": "Running", "step": "colmap", "progress": 0.6})
+        context.emit({"status": "Running", "step": step, "progress": 0.8 if self.dense else 0.6})
         context.emit({"status": "Completed", "output": str(outputs["ply"])})
         return PipelineResult(
             primary_output_path=outputs["ply"],
@@ -73,7 +91,8 @@ class ColmapPipeline:
         )
 
     def _command(self) -> list[str]:
-        cmd = os.getenv("COLMAP_CMD")
+        cmd = os.getenv("COLMAP_DENSE_CMD") if self.dense else None
+        cmd = cmd or os.getenv("COLMAP_CMD")
         if cmd:
             return split_command(cmd)
         script_path = Path(__file__).resolve().parents[2] / "workers" / "colmap_pipeline.py"
@@ -86,6 +105,7 @@ class ColmapPipeline:
         sparse_text_dir: Path,
         sparse_ply_path: Path,
         summary_path: Path,
+        dense_ply_path: Path,
     ) -> None:
         if not (workspace / "database.db").exists():
             raise RuntimeError("COLMAP did not produce database.db")
@@ -98,6 +118,8 @@ class ColmapPipeline:
             raise RuntimeError("COLMAP did not produce sparse.ply")
         if not summary_path.exists():
             raise RuntimeError("COLMAP did not produce summary.json")
+        if self.dense and (not dense_ply_path.exists() or _ply_vertex_count(dense_ply_path) == 0):
+            raise RuntimeError("COLMAP dense did not produce dense/fused.ply")
 
     def _copy_outputs(
         self,
@@ -106,9 +128,11 @@ class ColmapPipeline:
         sparse_dir: Path,
         sparse_text_dir: Path,
         sparse_ply_path: Path,
+        dense_dir: Path,
+        dense_ply_path: Path,
         summary_path: Path,
     ) -> dict[str, Path]:
-        target_root = outputs_dir / "colmap"
+        target_root = outputs_dir / self.output_root_name
         target_sparse = target_root / "sparse"
         target_sparse_text = target_root / "sparse_txt"
         for path in (target_sparse, target_sparse_text):
@@ -125,6 +149,14 @@ class ColmapPipeline:
         outputs["json"] = summary_target
         outputs["db"] = database_target
 
+        if self.dense:
+            dense_target = target_root / "dense" / DENSE_FUSED_NAME
+            dense_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(dense_ply_path, dense_target)
+            outputs["ply:sparse"] = sparse_ply_target
+            outputs["ply"] = dense_target
+            outputs["colmap_dense"] = dense_target
+
         for source in sparse_dir.rglob("*"):
             if source.is_file() and source.name in RAW_MODEL_FILES:
                 relative = source.relative_to(sparse_dir)
@@ -139,6 +171,15 @@ class ColmapPipeline:
             shutil.copy2(source, target)
             outputs[f"txt:{name}"] = target
         return outputs
+
+
+class ColmapDensePipeline(ColmapPipeline):
+    id = "colmap_dense"
+    name = "COLMAP Dense"
+    output_types = ["ply", "colmap_dense", "colmap_sparse", "db", "json", "txt", "bin"]
+    workspace_name = "colmap_dense"
+    output_root_name = "colmap_dense"
+    dense = True
 
 
 def _tail(text: str, max_chars: int = 4000) -> str:
@@ -182,6 +223,14 @@ def _classify_failure(output: str) -> str:
         return "mapping_failed"
     if "model_conversion" in lowered or "model_converter" in lowered:
         return "model_conversion_failed"
+    if "image_undistortion" in lowered or "image_undistorter" in lowered:
+        return "image_undistortion_failed"
+    if "patch_match_stereo" in lowered or "patchmatch" in lowered:
+        return "patch_match_stereo_failed"
+    if "stereo_fusion" in lowered:
+        return "stereo_fusion_failed"
+    if "missing_dense_ply" in lowered:
+        return "missing_dense_ply"
     if "no_sparse_model" in lowered:
         return "no_sparse_model"
     if "insufficient_reconstruction" in lowered:
@@ -202,4 +251,9 @@ def _failure_hint(failure: str) -> str:
         return "COLMAP needs at least two images, and usually benefits from 4-12 overlapping views."
     if failure == "insufficient_reconstruction":
         return "COLMAP ran but registered too few images for a usable sparse model."
+    if failure in {"patch_match_stereo_failed", "stereo_fusion_failed", "missing_dense_ply"}:
+        return (
+            "Sparse reconstruction succeeded, but dense stereo/fusion failed or produced no fused points. "
+            "Use more overlapping images, lower COLMAP_DENSE_MAX_IMAGE_SIZE, or inspect dense logs."
+        )
     return "Inspect task logs and COLMAP inputs for details."

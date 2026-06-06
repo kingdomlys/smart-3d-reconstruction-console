@@ -29,6 +29,8 @@ def main() -> int:
         os.environ["VGGT_MAX_IMAGES"] = "16"
         os.environ["COLMAP_MAX_UPLOAD_FILES"] = "32"
         os.environ["COLMAP_MAX_TOTAL_IMAGE_PIXELS"] = str(32 * 1280 * 720)
+        os.environ["COLMAP_DENSE_MAX_UPLOAD_FILES"] = "16"
+        os.environ["COLMAP_DENSE_MAX_TOTAL_IMAGE_PIXELS"] = str(16 * 1280 * 720)
 
         from fastapi.testclient import TestClient
 
@@ -52,10 +54,11 @@ def main() -> int:
             pipelines = client.get("/api/pipelines")
             assert pipelines.status_code == 200, pipelines.text
             pipeline_payload = pipelines.json()
-            assert len(pipeline_payload["items"]) == 3
+            assert len(pipeline_payload["items"]) == 4
             pipeline_limits = {item["id"]: item["limits"] for item in pipeline_payload["items"]}
             assert pipeline_limits["vggt"]["max_upload_files"] == 16
             assert pipeline_limits["colmap"]["max_upload_files"] == 32
+            assert pipeline_limits["colmap_dense"]["max_upload_files"] == 16
 
             response = client.post(
                 "/api/tasks",
@@ -157,6 +160,14 @@ def main() -> int:
                     data={"pipeline": "colmap"},
                     files=[("files", ("bad-colmap.png", make_image(), "image/png"))],
                 )
+                multi_colmap_dense = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap_dense"},
+                    files=[
+                        ("files", ("dense-a.png", make_image(), "image/png")),
+                        ("files", ("dense-b.png", make_image(), "image/png")),
+                    ],
+                )
                 vggt_too_many = client.post(
                     "/api/tasks",
                     data={"pipeline": "vggt"},
@@ -181,6 +192,14 @@ def main() -> int:
                         for index in range(33)
                     ],
                 )
+                colmap_dense_too_many = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap_dense"},
+                    files=[
+                        ("files", (f"colmap-dense-too-many-{index}.png", make_image(), "image/png"))
+                        for index in range(17)
+                    ],
+                )
             finally:
                 TASK_QUEUE.enqueue = original_enqueue
 
@@ -192,6 +211,8 @@ def main() -> int:
             assert multi_default.json()["pipeline_id"] == "vggt"
             assert multi_colmap.status_code == 200, multi_colmap.text
             assert multi_colmap.json()["pipeline_id"] == "colmap"
+            assert multi_colmap_dense.status_code == 200, multi_colmap_dense.text
+            assert multi_colmap_dense.json()["pipeline_id"] == "colmap_dense"
             assert invalid_colmap.status_code == 400, invalid_colmap.text
             assert invalid_colmap.json()["detail"]["error"] == "Pipeline does not support this upload"
             assert vggt_too_many.status_code == 400, vggt_too_many.text
@@ -202,6 +223,9 @@ def main() -> int:
             assert colmap_33.status_code == 400, colmap_33.text
             assert colmap_33.json()["detail"]["error"] == "Too many files"
             assert colmap_33.json()["detail"]["pipeline"] == "colmap"
+            assert colmap_dense_too_many.status_code == 400, colmap_dense_too_many.text
+            assert colmap_dense_too_many.json()["detail"]["error"] == "Too many files"
+            assert colmap_dense_too_many.json()["detail"]["pipeline"] == "colmap_dense"
 
     print("api smoke test passed")
     return 0

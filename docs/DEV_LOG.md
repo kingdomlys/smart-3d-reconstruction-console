@@ -50,3 +50,4 @@
 - Re-enabled COLMAP as a real sparse reconstruction pipeline with CUDA COLMAP binary support, text model conversion, output artifact discovery, and real control-plane smoke coverage.
 - Added explicit per-task pipeline selection with frontend model choice, while preserving defaults of single-image TripoSR and multi-image VGGT.
 - Added per-pipeline upload budgets: VGGT remains capped at 16 images, COLMAP Sparse accepts up to 32 images under a conservative total-pixel budget for an 8 GB VRAM target, and diagnostics/frontend now expose each pipeline's limits.
+- Added `COLMAP Dense` as an optional pipeline alongside the existing sparse route. Sparse still outputs `colmap/sparse.ply`; dense outputs `colmap_dense/dense/fused.ply` after undistortion, PatchMatch stereo, and stereo fusion.

@@ -82,22 +82,30 @@ def limits_for_pipeline(pipeline_id: str | None) -> UploadLimits:
             note="VGGT preprocesses images before inference; upload validation still caps raw inputs",
         )
 
-    if selected == "colmap":
-        max_upload_files = _env_int("COLMAP_MAX_UPLOAD_FILES", 32)
-        max_image_pixels = _env_int("COLMAP_MAX_IMAGE_PIXELS", SETTINGS.max_image_pixels)
+    if selected in {"colmap", "colmap_dense"}:
+        dense = selected == "colmap_dense"
+        prefix = "COLMAP_DENSE" if dense else "COLMAP"
+        default_max_files = 16 if dense else 32
+        default_total_pixels = default_max_files * COLMAP_DEFAULT_REFERENCE_PIXELS
+        max_upload_files = _env_int(f"{prefix}_MAX_UPLOAD_FILES", default_max_files)
+        max_image_pixels = _env_int(f"{prefix}_MAX_IMAGE_PIXELS", SETTINGS.max_image_pixels)
         return UploadLimits(
-            pipeline_id="colmap",
+            pipeline_id=selected,
             min_upload_files=2,
             max_upload_files=max_upload_files,
-            max_upload_bytes=_env_int("COLMAP_MAX_UPLOAD_BYTES", SETTINGS.max_upload_bytes),
+            max_upload_bytes=_env_int(f"{prefix}_MAX_UPLOAD_BYTES", SETTINGS.max_upload_bytes),
             max_image_pixels=max_image_pixels,
-            max_image_long_edge=_env_int("COLMAP_MAX_IMAGE_LONG_EDGE", SETTINGS.max_image_long_edge),
+            max_image_long_edge=_env_int(f"{prefix}_MAX_IMAGE_LONG_EDGE", SETTINGS.max_image_long_edge),
             max_total_image_pixels=_env_int(
-                "COLMAP_MAX_TOTAL_IMAGE_PIXELS",
-                max_upload_files * COLMAP_DEFAULT_REFERENCE_PIXELS,
+                f"{prefix}_MAX_TOTAL_IMAGE_PIXELS",
+                default_total_pixels,
             ),
-            target_vram_gb=_env_int("COLMAP_TARGET_VRAM_GB", 8),
-            note="sparse COLMAP route; default total-pixel budget allows 32 images near 1280x720",
+            target_vram_gb=_env_int(f"{prefix}_TARGET_VRAM_GB", 8),
+            note=(
+                "dense COLMAP route; default budget is conservative because PatchMatch stereo is memory-heavy"
+                if dense
+                else "sparse COLMAP route; default total-pixel budget allows 32 images near 1280x720"
+            ),
         )
 
     return _base_limits("default", SETTINGS.max_upload_files)

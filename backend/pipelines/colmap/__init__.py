@@ -1,3 +1,3 @@
-from .pipeline import ColmapPipeline
+from .pipeline import ColmapDensePipeline, ColmapPipeline
 
-__all__ = ["ColmapPipeline"]
+__all__ = ["ColmapDensePipeline", "ColmapPipeline"]

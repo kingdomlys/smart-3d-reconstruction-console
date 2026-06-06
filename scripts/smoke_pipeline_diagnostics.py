@@ -19,6 +19,8 @@ def main() -> int:
         os.environ["VGGT_MAX_IMAGES"] = "16"
         os.environ["COLMAP_MAX_UPLOAD_FILES"] = "32"
         os.environ["COLMAP_MAX_TOTAL_IMAGE_PIXELS"] = str(32 * 1280 * 720)
+        os.environ["COLMAP_DENSE_MAX_UPLOAD_FILES"] = "16"
+        os.environ["COLMAP_DENSE_MAX_TOTAL_IMAGE_PIXELS"] = str(16 * 1280 * 720)
 
         from fastapi.testclient import TestClient
 
@@ -33,7 +35,7 @@ def main() -> int:
             payload = response.json()
 
         items = {item["id"]: item for item in payload["items"]}
-        assert set(items) == {"triposr", "vggt", "colmap"}, items
+        assert set(items) == {"triposr", "vggt", "colmap", "colmap_dense"}, items
         assert items["triposr"]["placeholder_enabled"] is True
         assert items["triposr"]["ready"] is True
         assert items["triposr"]["support"] == "single image"
@@ -41,6 +43,8 @@ def main() -> int:
         assert items["vggt"]["support"] == "one or more images"
         assert "COLMAP_BIN" in items["colmap"]["configured_env"]
         assert items["colmap"]["support"] == "multiple images"
+        assert "COLMAP_BIN" in items["colmap_dense"]["configured_env"]
+        assert items["colmap_dense"]["support"] == "multiple images"
         assert "secret-vggt-python" not in str(payload)
         assert "secret-colmap-bin" not in str(payload)
         assert payload["features"]["explicit_pipeline_selection"] is True
@@ -50,6 +54,8 @@ def main() -> int:
         assert items["vggt"]["limits"]["max_upload_files"] == 16
         assert items["colmap"]["limits"]["max_upload_files"] == 32
         assert items["colmap"]["limits"]["max_total_image_pixels"] == 32 * 1280 * 720
+        assert items["colmap_dense"]["limits"]["max_upload_files"] == 16
+        assert items["colmap_dense"]["limits"]["max_total_image_pixels"] == 16 * 1280 * 720
 
     print("pipeline diagnostics smoke test passed")
     return 0

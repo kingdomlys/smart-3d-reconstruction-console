@@ -61,6 +61,9 @@ def main() -> int:
         colmap = get_pipeline("colmap")
         if not colmap.supports(image_count=2, mode="fast"):
             raise AssertionError("COLMAP should support multi-image reconstruction")
+        colmap_dense = get_pipeline("colmap_dense")
+        if not colmap_dense.supports(image_count=2, mode="fast"):
+            raise AssertionError("COLMAP Dense should support multi-image reconstruction")
 
         try:
             get_pipeline("gaussian_splatting")

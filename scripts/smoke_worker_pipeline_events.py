@@ -48,10 +48,24 @@ async def main_async() -> None:
             sparse_dir.mkdir(parents=True, exist_ok=True)
             return output_path
 
+        async def fake_run_colmap_dense(task_id: str, mode: str, on_event: callable) -> Path:
+            await on_event({"status": "Running", "step": "colmap-dense-fake", "progress": 0.5})
+            dirs = storage_module.ensure_task_dirs(task_id)
+            output_root = Path(dirs["outputs_dir"]) / "colmap_dense"
+            dense_root = output_root / "dense"
+            dense_root.mkdir(parents=True, exist_ok=True)
+            output_path = dense_root / "fused.ply"
+            output_path.write_text("ply", encoding="utf-8")
+            (output_root / "sparse.ply").write_text("ply", encoding="utf-8")
+            (output_root / "summary.json").write_text("{}", encoding="utf-8")
+            return output_path
+
         original_vggt = tasks_module._run_vggt_worker
         original_colmap = tasks_module._run_colmap_worker
+        original_colmap_dense = tasks_module._run_colmap_dense_worker
         tasks_module._run_vggt_worker = fake_run_vggt
         tasks_module._run_colmap_worker = fake_run_colmap
+        tasks_module._run_colmap_dense_worker = fake_run_colmap_dense
         db.init_db()
 
         worker_task = asyncio.create_task(task_worker())
@@ -59,6 +73,7 @@ async def main_async() -> None:
             for task_id, pipeline_id, image_count in (
                 ("smoke-vggt-route", "vggt", 1),
                 ("smoke-colmap-route", "colmap", 2),
+                ("smoke-colmap-dense-route", "colmap_dense", 2),
             ):
                 db.create_task(task_id, mode="fast", image_count=image_count, pipeline_id=pipeline_id)
                 await TASK_QUEUE.enqueue(task_id)
@@ -74,9 +89,15 @@ async def main_async() -> None:
             assert colmap_task and colmap_task["status"] == "Completed", colmap_task
             assert colmap_task["pipeline_id"] == "colmap", colmap_task
             assert colmap_task["output_path"].endswith("sparse.ply"), colmap_task
+
+            colmap_dense_task = db.get_task("smoke-colmap-dense-route")
+            assert colmap_dense_task and colmap_dense_task["status"] == "Completed", colmap_dense_task
+            assert colmap_dense_task["pipeline_id"] == "colmap_dense", colmap_dense_task
+            assert colmap_dense_task["output_path"].endswith("fused.ply"), colmap_dense_task
         finally:
             tasks_module._run_vggt_worker = original_vggt
             tasks_module._run_colmap_worker = original_colmap
+            tasks_module._run_colmap_dense_worker = original_colmap_dense
             worker_task.cancel()
             try:
                 await worker_task

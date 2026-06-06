@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from .db import create_task, get_task, init_db, list_tasks, mark_incomplete_tasks_interrupted, update_task
 from .diagnostics import get_pipeline_diagnostics
-from backend.pipelines.registry import get_pipeline
+from backend.pipelines.registry import get_pipeline, list_pipelines
 from .settings import SETTINGS
 from .storage import (
     UploadValidationError,
@@ -64,18 +64,14 @@ async def startup_event() -> None:
 @app.get("/api/config")
 async def get_config() -> dict:
     default_limits = limits_for_pipeline("vggt")
-    colmap_limits = limits_for_pipeline("colmap")
+    pipeline_limits = [limits_for_pipeline(pipeline.id) for pipeline in list_pipelines()]
     return {
         "tasks_root": str(SETTINGS.tasks_root),
         "max_upload_files": default_limits.max_upload_files,
         "max_upload_bytes": default_limits.max_upload_bytes,
         "max_image_pixels": default_limits.max_image_pixels,
         "max_image_long_edge": default_limits.max_image_long_edge,
-        "max_supported_upload_files": max(
-            limits_for_pipeline("triposr").max_upload_files,
-            default_limits.max_upload_files,
-            colmap_limits.max_upload_files,
-        ),
+        "max_supported_upload_files": max(limit.max_upload_files for limit in pipeline_limits),
     }
 
 

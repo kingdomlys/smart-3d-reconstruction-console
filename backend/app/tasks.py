@@ -274,6 +274,16 @@ async def _run_colmap_worker(task_id: str, mode: str, on_event: callable) -> Pat
     return output_path
 
 
+async def _run_colmap_dense_worker(task_id: str, mode: str, on_event: callable) -> Path:
+    _raise_if_canceled(task_id)
+    await _run_pipeline_worker(task_id, "colmap_dense", mode, on_event)
+    _raise_if_canceled(task_id)
+    output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "colmap_dense" / "dense" / "fused.ply"
+    if not output_path.exists():
+        raise RuntimeError("COLMAP Dense pipeline did not produce colmap_dense/dense/fused.ply")
+    return output_path
+
+
 async def _run_3dgs_worker(task_id: str, mode: str, on_event: callable) -> Path:
     _raise_if_canceled(task_id)
     await _run_pipeline_worker(task_id, "gaussian_splatting", mode, on_event)
@@ -362,6 +372,19 @@ async def task_worker() -> None:
                     output_path = await _run_colmap_worker(task_id, task["mode"], on_event)
                     if not output_path.exists():
                         raise RuntimeError("COLMAP pipeline did not produce a previewable PLY")
+                elif selected_pipeline == "colmap_dense":
+                    await TASK_QUEUE.broadcast(
+                        task_id,
+                        {
+                            "status": "Running",
+                            "pipeline_id": selected_pipeline,
+                            "step": "COLMAP Dense",
+                            "progress": 0.1,
+                        },
+                    )
+                    output_path = await _run_colmap_dense_worker(task_id, task["mode"], on_event)
+                    if not output_path.exists():
+                        raise RuntimeError("COLMAP Dense pipeline did not produce a previewable PLY")
                 else:
                     raise ValueError(f"Unsupported pipeline: {selected_pipeline}")
                 _raise_if_canceled(task_id)

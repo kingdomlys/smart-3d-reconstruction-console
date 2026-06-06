@@ -12,12 +12,14 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 TEXT_MODEL_FILES = ("cameras.txt", "images.txt", "points3D.txt")
 RAW_MODEL_FILES = ("cameras.bin", "images.bin", "points3D.bin")
 SPARSE_PLY_NAME = "sparse.ply"
+DENSE_FUSED_NAME = "fused.ply"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="COLMAP pipeline wrapper")
     parser.add_argument("--input-dir", required=True)
     parser.add_argument("--output-dir", required=True, help="COLMAP workspace output directory")
+    parser.add_argument("--dense", action="store_true", help="Run COLMAP dense stereo and fusion")
     return parser.parse_args()
 
 
@@ -73,6 +75,12 @@ def _classify_failure(step: str, output: str) -> str:
         return "mapping_failed"
     if step == "model_conversion":
         return "model_conversion_failed"
+    if step == "image_undistortion":
+        return "image_undistortion_failed"
+    if step == "patch_match_stereo":
+        return "patch_match_stereo_failed"
+    if step == "stereo_fusion":
+        return "stereo_fusion_failed"
     return f"{step}_failed"
 
 
@@ -128,6 +136,22 @@ def _write_sparse_ply(points_txt: Path, output_path: Path) -> int:
     return len(rows)
 
 
+def _ply_vertex_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    with path.open("rb") as file:
+        for raw_line in file:
+            line = raw_line.decode("ascii", errors="ignore").strip()
+            if line.startswith("element vertex "):
+                try:
+                    return int(line.rsplit(" ", 1)[-1])
+                except ValueError:
+                    return 0
+            if line == "end_header":
+                return 0
+    return 0
+
+
 def _registered_image_count(images_txt: Path) -> int:
     return _count_text_rows(images_txt) // 2
 
@@ -155,6 +179,8 @@ def _write_summary(
     sparse_model_dir: Path,
     sparse_text_dir: Path,
     sparse_ply_path: Path,
+    dense_workspace: Path | None = None,
+    dense_fused_ply_path: Path | None = None,
 ) -> dict[str, object]:
     cameras_txt = sparse_text_dir / "cameras.txt"
     images_txt = sparse_text_dir / "images.txt"
@@ -169,9 +195,72 @@ def _write_summary(
         "camera_count": _count_text_rows(cameras_txt),
         "registered_image_count": _registered_image_count(images_txt),
         "point_count": _count_text_rows(points_txt),
+        "reconstruction_type": "dense" if dense_fused_ply_path else "sparse",
     }
+    if dense_workspace and dense_fused_ply_path:
+        summary.update(
+            {
+                "dense_workspace_path": str(dense_workspace),
+                "dense_fused_ply_path": str(dense_fused_ply_path),
+                "dense_point_count": _ply_vertex_count(dense_fused_ply_path),
+            }
+        )
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
+
+
+def _run_dense_reconstruction(
+    colmap: str,
+    env: dict[str, str],
+    input_dir: Path,
+    sparse_model_dir: Path,
+    dense_dir: Path,
+) -> Path:
+    if dense_dir.exists():
+        shutil.rmtree(dense_dir)
+    dense_dir.mkdir(parents=True, exist_ok=True)
+
+    _run([
+        colmap,
+        "image_undistorter",
+        "--image_path",
+        str(input_dir),
+        "--input_path",
+        str(sparse_model_dir),
+        "--output_path",
+        str(dense_dir),
+        "--output_type",
+        "COLMAP",
+        "--max_image_size",
+        os.getenv("COLMAP_DENSE_MAX_IMAGE_SIZE", "1600"),
+    ], "image_undistortion", env)
+    _run([
+        colmap,
+        "patch_match_stereo",
+        "--workspace_path",
+        str(dense_dir),
+        "--workspace_format",
+        "COLMAP",
+        "--PatchMatchStereo.geom_consistency",
+        os.getenv("COLMAP_DENSE_GEOM_CONSISTENCY", "1"),
+    ], "patch_match_stereo", env)
+
+    fused_ply_path = dense_dir / DENSE_FUSED_NAME
+    _run([
+        colmap,
+        "stereo_fusion",
+        "--workspace_path",
+        str(dense_dir),
+        "--workspace_format",
+        "COLMAP",
+        "--input_type",
+        os.getenv("COLMAP_DENSE_FUSION_INPUT_TYPE", "geometric"),
+        "--output_path",
+        str(fused_ply_path),
+    ], "stereo_fusion", env)
+    if _ply_vertex_count(fused_ply_path) == 0:
+        raise RuntimeError("missing_dense_ply: COLMAP dense fusion produced no fused points")
+    return fused_ply_path
 
 
 def main() -> int:
@@ -187,6 +276,7 @@ def main() -> int:
     db_path = workspace / "database.db"
     sparse_dir = workspace / "sparse"
     sparse_txt_dir = workspace / "sparse_txt"
+    dense_dir = workspace / "dense"
     summary_path = workspace / "summary.json"
     if db_path.exists():
         db_path.unlink()
@@ -270,6 +360,19 @@ def main() -> int:
     summary = _write_summary(summary_path, input_dir, db_path, sparse_model_dir, sparse_txt_dir, sparse_ply_path)
     if summary["registered_image_count"] < 2:
         raise RuntimeError("insufficient_reconstruction: fewer than two images were registered")
+
+    if args.dense:
+        dense_fused_ply_path = _run_dense_reconstruction(colmap, env, input_dir, sparse_model_dir, dense_dir)
+        summary = _write_summary(
+            summary_path,
+            input_dir,
+            db_path,
+            sparse_model_dir,
+            sparse_txt_dir,
+            sparse_ply_path,
+            dense_dir,
+            dense_fused_ply_path,
+        )
 
     print(json.dumps({"step": "summary", "summary": summary}), flush=True)
 

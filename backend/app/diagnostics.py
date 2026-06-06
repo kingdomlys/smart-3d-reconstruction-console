@@ -21,6 +21,12 @@ PIPELINE_ENV_VARS = {
         "VGGT_SOURCE",
     ],
     "colmap": ["COLMAP_CMD", "COLMAP_BIN"],
+    "colmap_dense": [
+        "COLMAP_DENSE_CMD",
+        "COLMAP_CMD",
+        "COLMAP_BIN",
+        "COLMAP_DENSE_MAX_IMAGE_SIZE",
+    ],
     "gaussian_splatting": ["DGS_CMD", "DGS_TRAIN_SCRIPT", "DGS_ITERATIONS"],
 }
 
@@ -28,6 +34,9 @@ PIPELINE_DEPENDENCIES = {
     "triposr": {"TripoSR source": BASE_DIR / "third_party" / "TripoSR"},
     "vggt": {"VGGT source": BASE_DIR.parent / "vggt"},
     "colmap": {"COLMAP CUDA build": BASE_DIR.parent / "colmap" / "colmap-x64-windows-cuda"},
+    "colmap_dense": {
+        "COLMAP CUDA build": BASE_DIR.parent / "colmap" / "colmap-x64-windows-cuda"
+    },
     "gaussian_splatting": {
         "Gaussian Splatting source": BASE_DIR / "third_party" / "gaussian-splatting"
     },
@@ -37,6 +46,7 @@ PIPELINE_HINTS = {
     "triposr": "Set TRIPOSR_CMD or allow placeholder mode for local smoke tests.",
     "vggt": "Set VGGT_PY to the vggt conda python and VGGT_REPO to the local VGGT checkout.",
     "colmap": "Set COLMAP_CMD to run the in-repository wrapper or external COLMAP pipeline.",
+    "colmap_dense": "Set COLMAP_BIN and use the in-repository wrapper with dense mode enabled.",
     "gaussian_splatting": "Set DGS_CMD to run the 3DGS wrapper or training entry point.",
 }
 
@@ -63,7 +73,7 @@ def _support_summary(pipeline_id: str) -> str:
         return "single image"
     if pipeline_id == "vggt":
         return "one or more images"
-    if pipeline_id in {"colmap", "gaussian_splatting"}:
+    if pipeline_id in {"colmap", "colmap_dense", "gaussian_splatting"}:
         return "multiple images"
     return "custom"
 

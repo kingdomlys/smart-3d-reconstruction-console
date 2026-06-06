@@ -16,6 +16,8 @@ if str(REPO_ROOT) not in sys.path:
 os.environ["VGGT_MAX_IMAGES"] = "16"
 os.environ["COLMAP_MAX_UPLOAD_FILES"] = "32"
 os.environ["COLMAP_MAX_TOTAL_IMAGE_PIXELS"] = str(32 * 1280 * 720)
+os.environ["COLMAP_DENSE_MAX_UPLOAD_FILES"] = "16"
+os.environ["COLMAP_DENSE_MAX_TOTAL_IMAGE_PIXELS"] = str(16 * 1280 * 720)
 
 from backend.app.storage import save_uploads, validate_uploads
 from backend.app.upload_limits import limits_for_pipeline
@@ -59,6 +61,15 @@ def main() -> int:
         "too_many_colmap",
         [InMemoryUpload(f"colmap_{i}.png", (64, 64)) for i in range(33)],
         limits_for_pipeline("colmap"),
+    )
+    validate_uploads(
+        [InMemoryUpload(f"colmap_dense_{i}.png", (64, 64)) for i in range(16)],
+        limits_for_pipeline("colmap_dense"),
+    )
+    expect_error(
+        "too_many_colmap_dense",
+        [InMemoryUpload(f"colmap_dense_{i}.png", (64, 64)) for i in range(17)],
+        limits_for_pipeline("colmap_dense"),
     )
     try:
         validate_uploads(

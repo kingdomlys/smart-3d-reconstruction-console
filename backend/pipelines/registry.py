@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .base import Pipeline
-from .colmap.pipeline import ColmapPipeline
+from .colmap.pipeline import ColmapDensePipeline, ColmapPipeline
 from .triposr.pipeline import TripoSRPipeline
 from .vggt.pipeline import VggtPipeline
 
@@ -9,6 +9,7 @@ _PIPELINES: dict[str, Pipeline] = {
     "triposr": TripoSRPipeline(),
     "vggt": VggtPipeline(),
     "colmap": ColmapPipeline(),
+    "colmap_dense": ColmapDensePipeline(),
 }
 
 

@@ -6,7 +6,8 @@ const PREVIEW_TYPE_PRIORITY = ["glb", "ply"];
 const PIPELINE_LABELS = {
   triposr: "TripoSR",
   vggt: "VGGT",
-  colmap: "COLMAP Sparse"
+  colmap: "COLMAP Sparse",
+  colmap_dense: "COLMAP Dense"
 };
 
 function toWebSocketUrl(httpUrl) {
@@ -64,7 +65,7 @@ function supportsPipeline(pipeline, imageCount) {
   if (pipeline.id === "vggt") {
     return imageCount >= 1;
   }
-  if (pipeline.id === "colmap") {
+  if (pipeline.id === "colmap" || pipeline.id === "colmap_dense") {
     return imageCount > 1;
   }
   return false;
