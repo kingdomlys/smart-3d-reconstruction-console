@@ -45,3 +45,4 @@
 - Verification: TripoSR real smoke, TripoSR control-plane real smoke, pipeline environment audit, backend smoke checks, and frontend `npm run build` passed where applicable.
 - Integrated VGGT as the default multi-image route while preserving the legacy COLMAP -> 3DGS route behind `MULTI_IMAGE_PIPELINE=colmap_3dgs`.
 - Added VGGT pipeline diagnostics, environment examples, output discovery for preview PNGs, a fake-route smoke, and a real control-plane smoke that delegates inference to the `vggt` conda environment.
+- Temporarily disabled COLMAP and 3DGS registration/routing so validation focuses on the implemented TripoSR and VGGT pipelines.

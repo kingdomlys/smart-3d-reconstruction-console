@@ -220,6 +220,7 @@ async def _run_pipeline_worker(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        limit=1024 * 1024,
     )
     assert process.stdout and process.stderr
     stream_tail = StreamTail()
@@ -325,20 +326,8 @@ async def task_worker() -> None:
                         task_id, {"status": "Running", "step": "VGGT", "progress": 0.1}
                     )
                     output_path = await _run_vggt_worker(task_id, task["mode"], on_event)
-                elif selected_multi_pipeline in {"colmap_3dgs", "colmap+3dgs", "legacy"}:
-                    await TASK_QUEUE.broadcast(
-                        task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
-                    )
-                    await _run_colmap_worker(task_id, task["mode"], on_event)
-                    _raise_if_canceled(task_id)
-                    await TASK_QUEUE.broadcast(
-                        task_id, {"status": "Running", "step": "3DGS", "progress": 0.7}
-                    )
-                    output_path = await _run_3dgs_worker(task_id, task["mode"], on_event)
                 else:
-                    raise ValueError(
-                        "MULTI_IMAGE_PIPELINE must be 'vggt' or 'colmap_3dgs'"
-                    )
+                    raise ValueError("MULTI_IMAGE_PIPELINE must be 'vggt'")
                 _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))

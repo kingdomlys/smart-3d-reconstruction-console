@@ -1,6 +1,6 @@
 # Pipeline Setup Guide
 
-This project ships pipeline integrations for TripoSR, VGGT, COLMAP, and 3DGS. The control plane runs them through `backend/workers/run_pipeline.py`, and each pipeline can call third-party code through environment variables when the real CUDA dependencies are installed.
+This project currently enables TripoSR and VGGT. COLMAP and 3DGS wrappers remain in the repository for follow-up development, but they are not registered in the runtime pipeline list until their real paths are stable.
 
 ## 1) TripoSR
 
@@ -104,7 +104,11 @@ Control-plane real smoke command:
 
 The smoke creates a temporary task, copies three kitchen images from the VGGT checkout, runs the same queue path used by the app, and verifies a real `.ply`, `predictions.npz`, and three preview `.png` files.
 
-## 3) COLMAP
+## 3) Disabled Follow-Up Pipelines
+
+COLMAP and 3DGS are temporarily disabled in `backend/pipelines/registry.py`. They should stay hidden from `/api/pipelines` and unreachable from task routing while validating the currently implemented TripoSR and VGGT paths.
+
+### COLMAP
 
 Required:
 - COLMAP installed and accessible (either on PATH or via `COLMAP_BIN`).
@@ -123,9 +127,9 @@ COLMAP_CMD=python backend/workers/colmap_pipeline.py
 COLMAP_BIN=colmap
 ```
 
-The pipeline creates `database.db` and outputs `cameras.txt`, `images.txt`, and `points3D.txt` under `data/tasks/{id}/interim/colmap/sparse`.
+The intended pipeline creates `database.db` and outputs `cameras.txt`, `images.txt`, and `points3D.txt` under `data/tasks/{id}/interim/colmap/sparse`.
 
-## 4) 3DGS
+### 3DGS
 
 Required:
 - A working 3DGS training script.
@@ -144,29 +148,18 @@ DGS_CMD=python backend/workers/gsplat_pipeline.py
 DGS_TRAIN_SCRIPT=path/to/train.py
 ```
 
-The wrapper expects the training script to accept `--interim-dir`, `--output-dir`, and `--iterations`.
-
-The in-repository pipeline currently standardizes two output targets for multi-image tasks:
+The wrapper expects the training script to accept `--interim-dir`, `--output-dir`, and `--iterations`. The intended output targets are:
 
 - `point_cloud.ply`
 - `scene.splat`
 
-## 5) Multi-image route selection
+## 4) Multi-image route selection
 
 By default, multi-image uploads run VGGT and complete with `.ply`, `.npz`, and preview `.png` outputs.
 
-To keep testing the previous COLMAP -> 3DGS chain, set:
+`MULTI_IMAGE_PIPELINE=vggt` is currently the only supported runtime value.
 
-```
-MULTI_IMAGE_PIPELINE=colmap_3dgs
-```
-
-That route still standardizes two output targets for multi-image tasks:
-
-- `point_cloud.ply`
-- `scene.splat`
-
-## 6) Repository setup
+## 5) Repository setup
 
 After cloning the repository, initialize third-party dependencies:
 
@@ -174,7 +167,7 @@ After cloning the repository, initialize third-party dependencies:
 git submodule update --init --recursive
 ```
 
-## 7) Environment file
+## 6) Environment file
 
 Add these to `backend/.env` (see `backend/.env.example`).
 
@@ -191,7 +184,7 @@ MAX_IMAGE_LONG_EDGE=1920
 
 Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. A task can upload at most 8 images, and each image must fit within the 1080p limit.
 
-## 8) Pipeline extension point
+## 7) Pipeline extension point
 
 New reconstruction or inference methods should be added under `backend/pipelines/{method}/pipeline.py` and registered in `backend/pipelines/registry.py`.
 
@@ -206,7 +199,7 @@ The shared worker entry point is:
 python backend/workers/run_pipeline.py --pipeline triposr --task-id demo --input-dir ... --interim-dir ... --output-dir ... --logs-path ...
 ```
 
-## 9) Environment audit
+## 8) Environment audit
 
 Use this local audit before running real pipeline tests:
 
@@ -214,4 +207,4 @@ Use this local audit before running real pipeline tests:
 .\.venv\Scripts\python.exe scripts/audit_pipeline_env.py
 ```
 
-The audit reports TripoSR, VGGT, COLMAP, and 3DGS environment status. TripoSR and VGGT are expected to have CUDA-capable PyTorch. COLMAP and 3DGS may need additional platform-specific dependency work before their real smoke tests can pass.
+The audit reports TripoSR, VGGT, COLMAP, and 3DGS environment status. TripoSR and VGGT are expected to have CUDA-capable PyTorch. COLMAP and 3DGS remain useful as environment diagnostics, but they are not enabled runtime pipelines yet.

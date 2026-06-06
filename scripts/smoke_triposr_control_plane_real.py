@@ -14,11 +14,13 @@ if str(REPO_ROOT) not in sys.path:
 from backend.app import db
 
 
+def _default_triposr_python() -> Path:
+    return Path(os.getenv("TRIPOSR_PY", r"E:\conda\workspace\envs\tripo_env\python.exe")).resolve()
+
+
 def assert_triposr_runtime() -> None:
-    tripo_python = os.getenv("TRIPOSR_PY")
-    if not tripo_python:
-        raise RuntimeError("Set TRIPOSR_PY to the TripoSR environment python before running this smoke")
-    if not Path(tripo_python).exists():
+    tripo_python = _default_triposr_python()
+    if not tripo_python.exists():
         raise FileNotFoundError(f"TRIPOSR_PY does not exist: {tripo_python}")
 
 
@@ -34,6 +36,7 @@ async def main_async() -> None:
         task_root = tmp_root / "tasks"
 
         os.environ["TASKS_ROOT"] = str(task_root)
+        os.environ["TRIPOSR_PY"] = str(_default_triposr_python())
         os.environ["TRIPOSR_REPO"] = str(REPO_ROOT / "third_party" / "TripoSR")
         os.environ["TRIPOSR_DEVICE"] = os.getenv("TRIPOSR_DEVICE", "cuda:0")
         os.environ["USE_REMBG"] = "0"

@@ -56,17 +56,19 @@ def main() -> int:
         if not tripo_result.primary_output_path.exists():
             raise AssertionError("TripoSR pipeline did not write output")
 
-        colmap_context = make_context(root, "colmap")
-        write_image(colmap_context.inputs_dir / "image_1.png")
-        write_image(colmap_context.inputs_dir / "image_2.png")
-        colmap_result = get_pipeline("colmap").run(colmap_context)
-        if not (colmap_result.primary_output_path / "cameras.txt").exists():
-            raise AssertionError("COLMAP pipeline did not write sparse output")
+        try:
+            get_pipeline("colmap")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("COLMAP should be disabled until its real pipeline is implemented")
 
-        gs_context = make_context(root, "gaussian_splatting")
-        gs_result = get_pipeline("gaussian_splatting").run(gs_context)
-        if not gs_result.outputs["ply"].exists() or not gs_result.outputs["splat"].exists():
-            raise AssertionError("3DGS pipeline did not write both outputs")
+        try:
+            get_pipeline("gaussian_splatting")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("3DGS should be disabled until its real pipeline is implemented")
 
     print("pipeline registry smoke test passed")
     return 0
