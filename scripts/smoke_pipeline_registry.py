@@ -46,6 +46,8 @@ def main() -> int:
         raise AssertionError("single-image route should select triposr")
     if select_pipeline(image_count=2, mode="fast").id != "vggt":
         raise AssertionError("multi-image first route should select vggt")
+    if not get_pipeline("vggt").supports(image_count=1, mode="fast"):
+        raise AssertionError("VGGT should support single-image reconstruction")
 
     with TemporaryDirectory() as tmp:
         root = Path(tmp)

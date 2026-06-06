@@ -60,7 +60,9 @@ def _dependency_status(path: Path) -> dict[str, Any]:
 def _support_summary(pipeline_id: str) -> str:
     if pipeline_id == "triposr":
         return "single image"
-    if pipeline_id in {"vggt", "colmap", "gaussian_splatting"}:
+    if pipeline_id == "vggt":
+        return "one or more images"
+    if pipeline_id in {"colmap", "gaussian_splatting"}:
         return "multiple images"
     return "custom"
 

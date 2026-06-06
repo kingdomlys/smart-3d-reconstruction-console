@@ -136,6 +136,15 @@ def _multi_image_pipeline() -> str:
     return os.getenv("MULTI_IMAGE_PIPELINE", "vggt").strip().lower() or "vggt"
 
 
+def _task_pipeline_id(task: dict) -> str:
+    pipeline_id = (task.get("pipeline_id") or "").strip().lower()
+    if pipeline_id:
+        return pipeline_id
+    if task["image_count"] == 1:
+        return "triposr"
+    return _multi_image_pipeline()
+
+
 def _task_output_payload(task_id: str, output_path: Path) -> dict:
     outputs = list_output_files(task_id)
     output_types = sorted({item["type"] for item in outputs})
@@ -302,7 +311,8 @@ async def task_worker() -> None:
             update_task(task_id, status="Running")
             await TASK_QUEUE.broadcast(task_id, {"status": "Running"})
 
-            if task["image_count"] == 1:
+            selected_pipeline = _task_pipeline_id(task)
+            if selected_pipeline == "triposr":
                 await TASK_QUEUE.broadcast(
                     task_id, {"status": "Running", "step": "TripoSR", "progress": 0.1}
                 )
@@ -320,13 +330,12 @@ async def task_worker() -> None:
                 async def on_event(payload: dict) -> None:
                     await TASK_QUEUE.broadcast(task_id, payload)
 
-                selected_multi_pipeline = _multi_image_pipeline()
-                if selected_multi_pipeline == "vggt":
+                if selected_pipeline == "vggt":
                     await TASK_QUEUE.broadcast(
                         task_id, {"status": "Running", "step": "VGGT", "progress": 0.1}
                     )
                     output_path = await _run_vggt_worker(task_id, task["mode"], on_event)
-                elif selected_multi_pipeline == "colmap":
+                elif selected_pipeline == "colmap":
                     await TASK_QUEUE.broadcast(
                         task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
                     )
@@ -335,7 +344,7 @@ async def task_worker() -> None:
                     if not output_path.exists():
                         raise RuntimeError("COLMAP pipeline did not produce colmap/summary.json")
                 else:
-                    raise ValueError("MULTI_IMAGE_PIPELINE must be 'vggt' or 'colmap'")
+                    raise ValueError(f"Unsupported pipeline: {selected_pipeline}")
                 _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))

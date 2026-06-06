@@ -63,7 +63,7 @@ This runs the FastAPI control-plane queue in the backend environment while execu
 
 ## 2) VGGT
 
-VGGT is the default multi-image route. The backend runs the control-plane worker in `.venv`, then delegates model inference to the Python executable configured by `VGGT_PY`.
+VGGT is the default multi-image route and can also be selected for single-image reconstruction. The backend runs the control-plane worker in `.venv`, then delegates model inference to the Python executable configured by `VGGT_PY`.
 
 Required:
 - A working VGGT checkout.
@@ -174,12 +174,18 @@ The wrapper expects the training script to accept `--interim-dir`, `--output-dir
 
 ## 5) Multi-image route selection
 
-By default, multi-image uploads run VGGT and complete with `.ply`, `.npz`, and preview `.png` outputs.
+By default, single-image uploads run TripoSR and multi-image uploads run VGGT. The frontend can override the default with a compatible pipeline choice:
 
 Supported runtime values:
 
 - `vggt`
 - `colmap`
+
+Compatibility:
+
+- TripoSR: single image
+- VGGT: one or more images
+- COLMAP: multiple images
 
 ## 6) Repository setup
 

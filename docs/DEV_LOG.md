@@ -48,3 +48,4 @@
 - Temporarily disabled COLMAP and 3DGS registration/routing so validation focuses on the implemented TripoSR and VGGT pipelines.
 - Increased the default upload and VGGT image limit to 16.
 - Re-enabled COLMAP as a real sparse reconstruction pipeline with CUDA COLMAP binary support, text model conversion, output artifact discovery, and real control-plane smoke coverage.
+- Added explicit per-task pipeline selection with frontend model choice, while preserving defaults of single-image TripoSR and multi-image VGGT.

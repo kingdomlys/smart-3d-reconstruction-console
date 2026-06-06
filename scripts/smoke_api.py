@@ -117,6 +117,52 @@ def main() -> int:
             assert retry_after_cancel.status_code == 200, retry_after_cancel.text
             assert retry_after_cancel.json()["status"] == "Pending"
 
+            queued.clear()
+            try:
+                TASK_QUEUE.enqueue = fake_enqueue
+                single_default = client.post(
+                    "/api/tasks",
+                    files=[("files", ("single.png", make_image(), "image/png"))],
+                )
+                single_vggt = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "vggt"},
+                    files=[("files", ("single-vggt.png", make_image(), "image/png"))],
+                )
+                multi_default = client.post(
+                    "/api/tasks",
+                    files=[
+                        ("files", ("multi-a.png", make_image(), "image/png")),
+                        ("files", ("multi-b.png", make_image(), "image/png")),
+                    ],
+                )
+                multi_colmap = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap"},
+                    files=[
+                        ("files", ("colmap-a.png", make_image(), "image/png")),
+                        ("files", ("colmap-b.png", make_image(), "image/png")),
+                    ],
+                )
+                invalid_colmap = client.post(
+                    "/api/tasks",
+                    data={"pipeline": "colmap"},
+                    files=[("files", ("bad-colmap.png", make_image(), "image/png"))],
+                )
+            finally:
+                TASK_QUEUE.enqueue = original_enqueue
+
+            assert single_default.status_code == 200, single_default.text
+            assert single_default.json()["pipeline_id"] == "triposr"
+            assert single_vggt.status_code == 200, single_vggt.text
+            assert single_vggt.json()["pipeline_id"] == "vggt"
+            assert multi_default.status_code == 200, multi_default.text
+            assert multi_default.json()["pipeline_id"] == "vggt"
+            assert multi_colmap.status_code == 200, multi_colmap.text
+            assert multi_colmap.json()["pipeline_id"] == "colmap"
+            assert invalid_colmap.status_code == 400, invalid_colmap.text
+            assert invalid_colmap.json()["detail"]["error"] == "Pipeline does not support this upload"
+
     print("api smoke test passed")
     return 0
 

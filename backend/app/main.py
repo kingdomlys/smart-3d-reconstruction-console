@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import List
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from .db import create_task, get_task, init_db, list_tasks, mark_incomplete_tasks_interrupted, update_task
 from .diagnostics import get_pipeline_diagnostics
+from backend.pipelines.registry import get_pipeline
 from .settings import SETTINGS
 from .storage import (
     UploadValidationError,
@@ -78,7 +79,8 @@ async def get_pipelines() -> dict:
 @app.post("/api/tasks")
 async def create_task_endpoint(
     files: List[UploadFile] = File(...),
-    mode: str = "fast",
+    mode: str = Form("fast"),
+    pipeline: str | None = Form(None),
 ) -> dict:
     if not files:
         raise HTTPException(
@@ -103,15 +105,38 @@ async def create_task_endpoint(
     except UploadValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
 
+    pipeline_id = _select_task_pipeline(len(files), pipeline)
+
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)
     save_uploads(files, dirs["inputs_dir"])
 
-    task = create_task(task_id=task_id, mode=mode, image_count=len(files))
+    task = create_task(task_id=task_id, mode=mode, image_count=len(files), pipeline_id=pipeline_id)
     await TASK_QUEUE.enqueue(task_id)
-    logger.info("Task queued", extra={"task_id": task_id, "mode": mode})
+    logger.info("Task queued", extra={"task_id": task_id, "mode": mode, "pipeline": pipeline_id})
 
     return task
+
+
+def _select_task_pipeline(image_count: int, pipeline_id: str | None) -> str:
+    selected = (pipeline_id or ("triposr" if image_count == 1 else "vggt")).strip().lower()
+    try:
+        pipeline = get_pipeline(selected)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid pipeline", "pipeline": selected},
+        ) from exc
+    if not pipeline.supports(image_count=image_count, mode="fast"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Pipeline does not support this upload",
+                "pipeline": selected,
+                "image_count": image_count,
+            },
+        )
+    return selected
 
 
 @app.get("/api/tasks/{task_id}")

@@ -16,7 +16,7 @@ class VggtPipeline:
     output_types = ["ply", "npz", "png"]
 
     def supports(self, image_count: int, mode: str) -> bool:
-        return image_count > 1
+        return image_count >= 1
 
     def run(self, context: PipelineContext) -> PipelineResult:
         configured_repo = os.getenv("VGGT_REPO")

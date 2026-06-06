@@ -33,6 +33,7 @@ def init_db() -> None:
                 id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 mode TEXT NOT NULL,
+                pipeline_id TEXT,
                 image_count INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -41,6 +42,12 @@ def init_db() -> None:
             )
             """
         )
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(tasks)").fetchall()
+        }
+        if "pipeline_id" not in columns:
+            conn.execute("ALTER TABLE tasks ADD COLUMN pipeline_id TEXT")
         conn.commit()
 
 
@@ -70,15 +77,15 @@ def mark_incomplete_tasks_interrupted(statuses: Iterable[str] = ("Pending", "Run
         return cursor.rowcount
 
 
-def create_task(task_id: str, mode: str, image_count: int) -> Dict[str, Any]:
+def create_task(task_id: str, mode: str, image_count: int, pipeline_id: str | None = None) -> Dict[str, Any]:
     now = _utc_now()
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO tasks (id, status, mode, image_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, status, mode, pipeline_id, image_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (task_id, "Pending", mode, image_count, now, now),
+            (task_id, "Pending", mode, pipeline_id, image_count, now, now),
         )
         conn.commit()
     return get_task(task_id) or {}

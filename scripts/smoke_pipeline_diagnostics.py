@@ -33,8 +33,11 @@ def main() -> int:
         assert set(items) == {"triposr", "vggt", "colmap"}, items
         assert items["triposr"]["placeholder_enabled"] is True
         assert items["triposr"]["ready"] is True
+        assert items["triposr"]["support"] == "single image"
         assert "VGGT_PY" in items["vggt"]["configured_env"]
+        assert items["vggt"]["support"] == "one or more images"
         assert "COLMAP_BIN" in items["colmap"]["configured_env"]
+        assert items["colmap"]["support"] == "multiple images"
         assert "secret-vggt-python" not in str(payload)
         assert "secret-colmap-bin" not in str(payload)
         assert payload["limits"]["max_upload_files"] == 16

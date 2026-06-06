@@ -3,6 +3,11 @@ import TaskViewer from "./components/TaskViewer.jsx";
 
 const DEFAULT_API = "http://127.0.0.1:8000";
 const PREVIEW_TYPE_PRIORITY = ["glb", "ply"];
+const PIPELINE_LABELS = {
+  triposr: "TripoSR",
+  vggt: "VGGT",
+  colmap: "COLMAP Sparse"
+};
 
 function toWebSocketUrl(httpUrl) {
   return httpUrl.replace(/^http/, "ws");
@@ -35,6 +40,30 @@ function selectPreviewOutput(items) {
   return null;
 }
 
+function supportsPipeline(pipeline, imageCount) {
+  if (!pipeline || imageCount < 1) {
+    return false;
+  }
+  if (pipeline.id === "triposr") {
+    return imageCount === 1;
+  }
+  if (pipeline.id === "vggt") {
+    return imageCount >= 1;
+  }
+  if (pipeline.id === "colmap") {
+    return imageCount > 1;
+  }
+  return false;
+}
+
+function defaultPipelineId(imageCount, availablePipelines) {
+  const preferred = imageCount === 1 ? "triposr" : "vggt";
+  if (availablePipelines.some((pipeline) => pipeline.id === preferred)) {
+    return preferred;
+  }
+  return availablePipelines[0]?.id || "";
+}
+
 export default function App() {
   const apiBase = import.meta.env.VITE_API_BASE || DEFAULT_API;
   const [files, setFiles] = useState([]);
@@ -49,9 +78,18 @@ export default function App() {
   const [error, setError] = useState("");
   const [tasks, setTasks] = useState([]);
   const [pipelineDiagnostics, setPipelineDiagnostics] = useState(null);
+  const [selectedPipeline, setSelectedPipeline] = useState("");
 
   const wsBase = useMemo(() => toWebSocketUrl(apiBase), [apiBase]);
+  const availablePipelines = useMemo(
+    () =>
+      (pipelineDiagnostics?.items || []).filter((pipeline) =>
+        supportsPipeline(pipeline, files.length)
+      ),
+    [pipelineDiagnostics, files.length]
+  );
   const selectedTask = tasks.find((task) => task.id === taskId);
+  const activePipelineId = selectedTask ? selectedTask.pipeline_id : selectedPipeline;
   const canRetry =
     taskId && selectedTask && !["Pending", "Running"].includes(selectedTask.status);
   const canCancel =
@@ -92,6 +130,16 @@ export default function App() {
     loadTasks();
     loadPipelineDiagnostics();
   }, []);
+
+  useEffect(() => {
+    if (!files.length || availablePipelines.length === 0) {
+      setSelectedPipeline("");
+      return;
+    }
+    if (!availablePipelines.some((pipeline) => pipeline.id === selectedPipeline)) {
+      setSelectedPipeline(defaultPipelineId(files.length, availablePipelines));
+    }
+  }, [files.length, availablePipelines, selectedPipeline]);
 
   useEffect(() => {
     return () => {
@@ -226,6 +274,9 @@ export default function App() {
     setStatus("Uploading");
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
+    if (selectedPipeline) {
+      formData.append("pipeline", selectedPipeline);
+    }
 
     const response = await fetch(`${apiBase}/api/tasks`, {
       method: "POST",
@@ -280,10 +331,30 @@ export default function App() {
               multiple
               onChange={(event) => setFiles(Array.from(event.target.files || []))}
             />
+            <div className="field">
+              <label htmlFor="pipeline-select">Pipeline</label>
+              <select
+                id="pipeline-select"
+                value={selectedPipeline}
+                disabled={!files.length || availablePipelines.length === 0}
+                onChange={(event) => setSelectedPipeline(event.target.value)}
+              >
+                {!files.length && <option value="">Select images first</option>}
+                {files.length > 0 && availablePipelines.length === 0 && (
+                  <option value="">No compatible pipeline</option>
+                )}
+                {availablePipelines.map((pipeline) => (
+                  <option key={pipeline.id} value={pipeline.id}>
+                    {PIPELINE_LABELS[pipeline.id] || pipeline.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button type="submit">Start Task</button>
           </form>
           <div className="meta">
             <p>Task ID: {taskId || "-"}</p>
+            <p>Pipeline: {activePipelineId ? PIPELINE_LABELS[activePipelineId] || activePipelineId : "-"}</p>
             <p>Output: {outputPath || "-"}</p>
             {error && <p className="error">Error: {error}</p>}
           </div>
