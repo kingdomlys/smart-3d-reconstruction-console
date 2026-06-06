@@ -41,6 +41,7 @@ export default function App() {
   const [logs, setLogs] = useState("");
   const [error, setError] = useState("");
   const [tasks, setTasks] = useState([]);
+  const [pipelineDiagnostics, setPipelineDiagnostics] = useState(null);
 
   const wsBase = useMemo(() => toWebSocketUrl(apiBase), [apiBase]);
   const selectedTask = tasks.find((task) => task.id === taskId);
@@ -82,6 +83,7 @@ export default function App() {
 
   useEffect(() => {
     loadTasks();
+    loadPipelineDiagnostics();
   }, []);
 
   useEffect(() => {
@@ -143,6 +145,14 @@ export default function App() {
     }
     const payload = await response.json();
     setTasks(payload.items || []);
+  }
+
+  async function loadPipelineDiagnostics() {
+    const response = await fetch(`${apiBase}/api/pipelines`);
+    if (!response.ok) {
+      return;
+    }
+    setPipelineDiagnostics(await response.json());
   }
 
   async function selectTask(task) {
@@ -268,6 +278,42 @@ export default function App() {
             <p>Task ID: {taskId || "-"}</p>
             <p>Output: {outputPath || "-"}</p>
             {error && <p className="error">Error: {error}</p>}
+          </div>
+        </section>
+
+        <section className="panel system-panel">
+          <div className="panel-header">
+            <h2>System</h2>
+            <button type="button" className="ghost" onClick={loadPipelineDiagnostics}>
+              Refresh
+            </button>
+          </div>
+          <div className="system-meta">
+            <p>Tasks root: {pipelineDiagnostics?.tasks_root || "-"}</p>
+            <p>
+              Uploads: up to {pipelineDiagnostics?.limits?.max_upload_files || "-"} images,{" "}
+              {pipelineDiagnostics?.limits?.max_image_long_edge || "-"} px long edge
+            </p>
+          </div>
+          <div className="pipeline-list">
+            {(pipelineDiagnostics?.items || []).map((pipeline) => (
+              <div key={pipeline.id} className="pipeline-row">
+                <div>
+                  <strong>{pipeline.name}</strong>
+                  <span>{pipeline.support}</span>
+                </div>
+                <div>
+                  <span className={`badge ${pipeline.ready ? "ready" : "missing"}`}>
+                    {pipeline.ready ? "Ready" : "Setup needed"}
+                  </span>
+                  <span className="pipeline-types">{pipeline.output_types.join(", ")}</span>
+                </div>
+                {!pipeline.ready && pipeline.missing_env?.length > 0 && (
+                  <p>Missing: {pipeline.missing_env.slice(0, 2).join(", ")}</p>
+                )}
+              </div>
+            ))}
+            {!pipelineDiagnostics && <p className="muted">Pipeline diagnostics unavailable.</p>}
           </div>
         </section>
 

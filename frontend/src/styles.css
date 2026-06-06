@@ -185,7 +185,8 @@ button.ghost.danger:hover {
 }
 
 .task-list,
-.output-list {
+.output-list,
+.pipeline-list {
   display: grid;
   gap: 8px;
 }
@@ -227,6 +228,76 @@ button.ghost.danger:hover {
 
 .muted {
   color: var(--muted);
+}
+
+.system-panel {
+  grid-column: span 2;
+}
+
+.system-meta {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.system-meta p {
+  margin: 0 0 6px;
+}
+
+.pipeline-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pipeline-row > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.pipeline-row strong {
+  display: block;
+  font-size: 14px;
+}
+
+.pipeline-row span,
+.pipeline-row p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  min-height: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.badge.ready {
+  border-color: #9fd3b2;
+  background: #edf9f1;
+  color: #166534;
+}
+
+.badge.missing {
+  border-color: #f1b8b2;
+  background: #fff1f0;
+  color: var(--danger);
+}
+
+.pipeline-types {
+  text-align: right;
 }
 
 .viewer {
@@ -277,7 +348,8 @@ button.ghost.danger:hover {
   }
 
   .viewer,
-  .logs {
+  .logs,
+  .system-panel {
     grid-column: span 2;
   }
 }
@@ -297,7 +369,8 @@ button.ghost.danger:hover {
 
   .grid,
   .viewer,
-  .logs {
+  .logs,
+  .system-panel {
     grid-template-columns: 1fr;
     grid-column: auto;
   }

@@ -29,3 +29,6 @@
 - Added task cancellation for Pending/Running jobs, including API cancellation, worker cancel checks, running subprocess termination, retry protection during cancellation cleanup, and frontend cancel action.
 - Added cancellation smoke coverage for active task termination and API conflict behavior.
 - Verification: backend API, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.
+- Added pipeline diagnostics API and frontend System panel for task root, upload limits, pipeline readiness, configured environment variables, output types, and dependency paths.
+- Added diagnostics smoke coverage to verify pipeline registration and avoid leaking environment variable values.
+- Verification: backend API, pipeline diagnostics, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.

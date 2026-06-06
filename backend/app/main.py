@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from .db import create_task, get_task, init_db, list_tasks, mark_incomplete_tasks_interrupted, update_task
+from .diagnostics import get_pipeline_diagnostics
 from .settings import SETTINGS
 from .storage import (
     UploadValidationError,
@@ -66,6 +67,11 @@ async def get_config() -> dict:
         "max_image_pixels": SETTINGS.max_image_pixels,
         "max_image_long_edge": SETTINGS.max_image_long_edge,
     }
+
+
+@app.get("/api/pipelines")
+async def get_pipelines() -> dict:
+    return get_pipeline_diagnostics()
 
 
 @app.post("/api/tasks")

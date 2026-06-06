@@ -44,6 +44,10 @@ def main() -> int:
             payload = config.json()
             assert payload["max_upload_files"] == 8
 
+            pipelines = client.get("/api/pipelines")
+            assert pipelines.status_code == 200, pipelines.text
+            assert len(pipelines.json()["items"]) == 3
+
             response = client.post(
                 "/api/tasks",
                 files=[
