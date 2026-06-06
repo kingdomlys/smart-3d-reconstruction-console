@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import TaskViewer from "./components/TaskViewer.jsx";
 
 const DEFAULT_API = "http://127.0.0.1:8000";
+const PREVIEW_TYPE_PRIORITY = ["glb", "ply"];
 
 function toWebSocketUrl(httpUrl) {
   return httpUrl.replace(/^http/, "ws");
@@ -17,6 +18,16 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function selectPreviewOutput(items) {
+  for (const type of PREVIEW_TYPE_PRIORITY) {
+    const match = items.find((item) => item.type === type);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
+}
+
 export default function App() {
   const apiBase = import.meta.env.VITE_API_BASE || DEFAULT_API;
   const [files, setFiles] = useState([]);
@@ -26,6 +37,7 @@ export default function App() {
   const [outputUrl, setOutputUrl] = useState("");
   const [outputPath, setOutputPath] = useState("");
   const [outputs, setOutputs] = useState([]);
+  const [previewOutput, setPreviewOutput] = useState(null);
   const [logs, setLogs] = useState("");
   const [error, setError] = useState("");
   const [tasks, setTasks] = useState([]);
@@ -78,8 +90,15 @@ export default function App() {
     };
   }, [outputUrl]);
 
-  async function fetchOutput(id, base) {
-    const response = await fetch(`${base}/api/tasks/${id}/output`);
+  async function fetchPreviewOutput(items) {
+    const preview = selectPreviewOutput(items);
+    setPreviewOutput(preview);
+    if (!preview) {
+      setOutputUrl("");
+      return;
+    }
+
+    const response = await fetch(`${apiBase}${preview.download_url}`);
     if (!response.ok) {
       setOutputUrl("");
       return;
@@ -93,10 +112,12 @@ export default function App() {
     const response = await fetch(`${apiBase}/api/tasks/${id}/outputs`);
     if (!response.ok) {
       setOutputs([]);
-      return;
+      return [];
     }
     const payload = await response.json();
-    setOutputs(payload.items || []);
+    const items = payload.items || [];
+    setOutputs(items);
+    return items;
   }
 
   async function fetchLogs(id) {
@@ -109,7 +130,8 @@ export default function App() {
   }
 
   async function refreshTaskDetails(id) {
-    await Promise.all([fetchOutput(id, apiBase), fetchOutputs(id), fetchLogs(id), loadTasks()]);
+    const items = await fetchOutputs(id);
+    await Promise.all([fetchPreviewOutput(items), fetchLogs(id), loadTasks()]);
   }
 
   async function loadTasks() {
@@ -127,12 +149,11 @@ export default function App() {
     setOutputPath(task.output_path || "");
     setError(task.error || "");
     setOutputUrl("");
+    setPreviewOutput(null);
     setOutputs([]);
     setLogs("");
-    if (task.output_path) {
-      await fetchOutput(task.id, apiBase);
-    }
-    await Promise.all([fetchOutputs(task.id), fetchLogs(task.id)]);
+    const items = await fetchOutputs(task.id);
+    await Promise.all([fetchPreviewOutput(items), fetchLogs(task.id)]);
   }
 
   async function retryTask() {
@@ -153,6 +174,7 @@ export default function App() {
     setStatus(payload.status || "Pending");
     setOutputPath(payload.output_path || "");
     setOutputUrl("");
+    setPreviewOutput(null);
     setOutputs([]);
     await loadTasks();
   }
@@ -184,6 +206,7 @@ export default function App() {
     setStatus(payload.status || "Queued");
     setOutputUrl("");
     setOutputPath("");
+    setPreviewOutput(null);
     setOutputs([]);
     setLogs("");
     setError("");
@@ -257,7 +280,7 @@ export default function App() {
 
         <section className="panel viewer">
           <h2>Preview</h2>
-          <TaskViewer outputUrl={outputUrl} outputPath={outputPath} />
+          <TaskViewer outputUrl={outputUrl} output={previewOutput} />
         </section>
 
         <section className="panel outputs">

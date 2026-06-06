@@ -21,4 +21,8 @@
 - Added frontend task observability: error display, logs panel, multi-output download list, and retry action.
 - Added task observability smoke coverage for log reading, output listing, path traversal rejection, and interrupted task marking.
 - Verification: backend API, upload validation, pipeline registry, worker entry, and task observability smoke checks passed in `.venv`.
-- Current environment note: frontend build could not run because this shell lacks Node/npm.
+- Added unified frontend preview selection from `/outputs`, GLB/PLY preview routing, PLY point-cloud rendering, and preview failure fallback.
+- Added output asset smoke coverage for `.glb`, `.ply`, and `.splat` output discovery.
+- Added frontend dependency lockfile and ignored local `node_modules`/`dist` artifacts.
+- Verification: backend API, upload validation, pipeline registry, worker entry, task observability, output asset smoke checks, and frontend `npm run build` passed.
+- Current environment note: `npm audit` reports 2 moderate dev-server advisories through Vite/esbuild; production dependency audit with `--omit=dev` is clean, and the available fix requires a breaking Vite upgrade.

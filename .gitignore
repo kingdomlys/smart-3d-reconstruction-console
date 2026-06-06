@@ -11,6 +11,10 @@ __pycache__/
 # Data artifacts
 data/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # OS
 .DS_Store
 Thumbs.db
