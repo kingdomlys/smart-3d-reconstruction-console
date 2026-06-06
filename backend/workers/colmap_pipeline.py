@@ -51,7 +51,28 @@ def _run(cmd: list[str], step: str, env: dict[str, str]) -> None:
         print(f"[{step}:stderr]\n{_tail(result.stderr)}", flush=True)
     if result.returncode != 0:
         details = "\n".join(part for part in (result.stdout, result.stderr) if part)
-        raise RuntimeError(f"{step} failed: {_tail(details)}")
+        raise RuntimeError(f"{_classify_failure(step, details)}: {_tail(details)}")
+
+
+def _classify_failure(step: str, output: str) -> str:
+    lowered = output.lower()
+    if "failed to create any sparse model" in lowered:
+        return "no_initial_pair"
+    if "no good initial image pair" in lowered:
+        return "no_initial_pair"
+    if "bad initial pair" in lowered:
+        return "bad_initial_pair"
+    if "not enough images" in lowered:
+        return "not_enough_images"
+    if step == "feature_extraction":
+        return "feature_extraction_failed"
+    if step == "matching":
+        return "matching_failed"
+    if step == "mapping":
+        return "mapping_failed"
+    if step == "model_conversion":
+        return "model_conversion_failed"
+    return f"{step}_failed"
 
 
 def _count_text_rows(path: Path) -> int:
@@ -144,7 +165,11 @@ def main() -> int:
         "--FeatureExtraction.use_gpu",
         os.getenv("COLMAP_USE_GPU", "1"),
         "--SiftExtraction.max_num_features",
-        os.getenv("COLMAP_MAX_NUM_FEATURES", "8192"),
+        os.getenv("COLMAP_MAX_NUM_FEATURES", "16384"),
+        "--SiftExtraction.estimate_affine_shape",
+        os.getenv("COLMAP_ESTIMATE_AFFINE_SHAPE", "1"),
+        "--SiftExtraction.domain_size_pooling",
+        os.getenv("COLMAP_DOMAIN_SIZE_POOLING", "1"),
     ], "feature_extraction", env)
     _run([
         colmap,
@@ -168,9 +193,15 @@ def main() -> int:
         "--Mapper.min_model_size",
         os.getenv("COLMAP_MAPPER_MIN_MODEL_SIZE", "2"),
         "--Mapper.init_min_num_inliers",
-        os.getenv("COLMAP_INIT_MIN_NUM_INLIERS", "30"),
+        os.getenv("COLMAP_INIT_MIN_NUM_INLIERS", "15"),
+        "--Mapper.init_max_error",
+        os.getenv("COLMAP_INIT_MAX_ERROR", "12"),
+        "--Mapper.init_min_tri_angle",
+        os.getenv("COLMAP_INIT_MIN_TRI_ANGLE", "1"),
         "--Mapper.abs_pose_min_num_inliers",
-        os.getenv("COLMAP_ABS_POSE_MIN_NUM_INLIERS", "15"),
+        os.getenv("COLMAP_ABS_POSE_MIN_NUM_INLIERS", "8"),
+        "--Mapper.abs_pose_max_error",
+        os.getenv("COLMAP_ABS_POSE_MAX_ERROR", "24"),
     ], "mapping", env)
 
     sparse_model_dir = _best_sparse_model(sparse_dir)

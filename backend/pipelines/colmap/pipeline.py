@@ -48,7 +48,8 @@ class ColmapPipeline:
             context.emit({"status": "Running", "step": "colmap", "progress": 0.4, "stderr": _tail(result.stderr)})
         if result.returncode != 0:
             details = "\n".join(part for part in (result.stdout, result.stderr) if part)
-            raise RuntimeError(f"COLMAP {_classify_failure(details)}: {_tail(details)}")
+            failure = _classify_failure(details)
+            raise RuntimeError(f"COLMAP {failure}: {_failure_hint(failure)}\n{_tail(details)}")
 
         self._validate_outputs(workspace, sparse_dir, sparse_text_dir, summary_path)
         outputs = self._copy_outputs(context.outputs_dir, workspace, sparse_dir, sparse_text_dir, summary_path)
@@ -133,6 +134,16 @@ def _tail(text: str, max_chars: int = 4000) -> str:
 
 def _classify_failure(output: str) -> str:
     lowered = output.lower()
+    if "no_initial_pair" in lowered:
+        return "no_initial_pair"
+    if "bad_initial_pair" in lowered:
+        return "bad_initial_pair"
+    if "failed to create any sparse model" in lowered:
+        return "no_initial_pair"
+    if "no good initial image pair" in lowered:
+        return "no_initial_pair"
+    if "bad initial pair" in lowered:
+        return "bad_initial_pair"
     if "feature_extraction" in lowered or "feature extractor" in lowered:
         return "feature_extraction_failed"
     if "matching" in lowered or "matcher" in lowered:
@@ -148,3 +159,17 @@ def _classify_failure(output: str) -> str:
     if "not_enough_images" in lowered:
         return "not_enough_images"
     return "failed"
+
+
+def _failure_hint(failure: str) -> str:
+    if failure in {"no_initial_pair", "bad_initial_pair"}:
+        return (
+            "COLMAP could not initialize a sparse reconstruction. Use photos of the same static "
+            "scene/object with strong overlap, visible texture, and moderate viewpoint changes; "
+            "avoid unrelated images, large jumps, heavy blur, reflective surfaces, or pure background."
+        )
+    if failure == "not_enough_images":
+        return "COLMAP needs at least two images, and usually benefits from 4-12 overlapping views."
+    if failure == "insufficient_reconstruction":
+        return "COLMAP ran but registered too few images for a usable sparse model."
+    return "Inspect task logs and COLMAP inputs for details."

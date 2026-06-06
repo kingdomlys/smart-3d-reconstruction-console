@@ -74,14 +74,16 @@ function PlyPointCloud({ url }) {
 
   return (
     <Center>
-      <points geometry={geometry}>
-        <pointsMaterial
-          attach="material"
-          size={0.012}
-          sizeAttenuation
-          vertexColors={Boolean(geometry.getAttribute("color"))}
-        />
-      </points>
+      <group scale={[1, -1, -1]}>
+        <points geometry={geometry}>
+          <pointsMaterial
+            attach="material"
+            size={0.012}
+            sizeAttenuation
+            vertexColors={Boolean(geometry.getAttribute("color"))}
+          />
+        </points>
+      </group>
     </Center>
   );
 }

@@ -132,6 +132,21 @@ The pipeline runs feature extraction, exhaustive matching, sparse mapping, and t
 - `colmap/sparse_txt/points3D.txt`
 - raw sparse `.bin` model files under `colmap/sparse`
 
+COLMAP requires images from the same static scene or object with enough overlap, stable lighting, visible texture, and moderate viewpoint changes. If images are unrelated, too sparse, blurred, reflective, mostly background, or taken from very large viewpoint jumps, sparse reconstruction can fail with `no_initial_pair` or `bad_initial_pair`. In that case, COLMAP ran correctly but could not initialize geometry from the inputs.
+
+Tunable defaults:
+
+```
+COLMAP_MAX_NUM_FEATURES=16384
+COLMAP_ESTIMATE_AFFINE_SHAPE=1
+COLMAP_DOMAIN_SIZE_POOLING=1
+COLMAP_INIT_MIN_NUM_INLIERS=15
+COLMAP_INIT_MAX_ERROR=12
+COLMAP_INIT_MIN_TRI_ANGLE=1
+COLMAP_ABS_POSE_MIN_NUM_INLIERS=8
+COLMAP_ABS_POSE_MAX_ERROR=24
+```
+
 Control-plane real smoke command:
 
 ```
