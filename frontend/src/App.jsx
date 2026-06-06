@@ -18,6 +18,13 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatLimit(bytes) {
+  if (!bytes) {
+    return "-";
+  }
+  return formatSize(bytes);
+}
+
 function selectPreviewOutput(items) {
   for (const type of PREVIEW_TYPE_PRIORITY) {
     const match = items.find((item) => item.type === type);
@@ -227,8 +234,9 @@ export default function App() {
 
     if (!response.ok) {
       const payload = await response.json();
-      setStatus(payload.detail?.error || "Upload failed");
-      setError(payload.detail?.hint || "");
+      const detail = payload.detail || {};
+      setStatus(detail.error || "Upload failed");
+      setError(detail.hint || (detail.max_bytes ? `Max file size: ${formatLimit(detail.max_bytes)}` : ""));
       return;
     }
 
@@ -292,6 +300,7 @@ export default function App() {
             <p>Tasks root: {pipelineDiagnostics?.tasks_root || "-"}</p>
             <p>
               Uploads: up to {pipelineDiagnostics?.limits?.max_upload_files || "-"} images,{" "}
+              {formatLimit(pipelineDiagnostics?.limits?.max_upload_bytes)} per file,{" "}
               {pipelineDiagnostics?.limits?.max_image_long_edge || "-"} px long edge
             </p>
           </div>

@@ -64,6 +64,7 @@ async def get_config() -> dict:
     return {
         "tasks_root": str(SETTINGS.tasks_root),
         "max_upload_files": SETTINGS.max_upload_files,
+        "max_upload_bytes": SETTINGS.max_upload_bytes,
         "max_image_pixels": SETTINGS.max_image_pixels,
         "max_image_long_edge": SETTINGS.max_image_long_edge,
     }

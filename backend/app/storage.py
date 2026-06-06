@@ -156,6 +156,13 @@ def _validate_image_dimensions(upload: UploadFileLike) -> tuple[int, int]:
     return width, height
 
 
+def _upload_size(upload: UploadFileLike) -> int:
+    upload.file.seek(0, 2)
+    size = upload.file.tell()
+    upload.file.seek(0)
+    return size
+
+
 def validate_uploads(files: List[UploadFileLike]) -> None:
     if len(files) > SETTINGS.max_upload_files:
         raise UploadValidationError(
@@ -177,6 +184,26 @@ def validate_uploads(files: List[UploadFileLike]) -> None:
                 "error": "Unsupported file type",
                 "allowed": sorted(ALLOWED_EXTENSIONS),
                 "invalid_files": invalid_files,
+            }
+        )
+
+    oversize_uploads = []
+    for upload in files:
+        size = _upload_size(upload)
+        if size > SETTINGS.max_upload_bytes:
+            oversize_uploads.append(
+                {
+                    "filename": upload.filename,
+                    "size": size,
+                }
+            )
+
+    if oversize_uploads:
+        raise UploadValidationError(
+            {
+                "error": "Upload file exceeds size limit",
+                "max_bytes": SETTINGS.max_upload_bytes,
+                "files": oversize_uploads,
             }
         )
 

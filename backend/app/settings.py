@@ -54,6 +54,7 @@ class Settings:
     app_port: int
     tasks_root: Path
     max_upload_files: int
+    max_upload_bytes: int
     max_image_pixels: int
     max_image_long_edge: int
 
@@ -64,6 +65,7 @@ class Settings:
             app_port=_env_int("APP_PORT", 8000),
             tasks_root=_env_path("TASKS_ROOT", BASE_DIR / "data" / "tasks"),
             max_upload_files=_env_int("MAX_UPLOAD_FILES", 8),
+            max_upload_bytes=_env_int("MAX_UPLOAD_BYTES", 20 * 1024 * 1024),
             max_image_pixels=_env_int("MAX_IMAGE_PIXELS", 1920 * 1080),
             max_image_long_edge=_env_int("MAX_IMAGE_LONG_EDGE", 1920),
         )

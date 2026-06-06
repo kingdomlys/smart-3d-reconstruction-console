@@ -36,3 +36,6 @@
 - Fixed pipeline command splitting for quoted Windows paths used by `TRIPOSR_CMD`, `COLMAP_CMD`, and `DGS_CMD`.
 - Added smoke coverage for command splitting and pipeline failure summaries.
 - Verification: backend API, command split, task failure summary, pipeline diagnostics, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.
+- Added configurable per-file upload size limit through `MAX_UPLOAD_BYTES`, exposed it in config/diagnostics responses, and surfaced it in the frontend System panel and upload error messages.
+- Added upload validation smoke coverage for byte-size rejection.
+- Verification: backend API, upload validation, pipeline diagnostics, command split, task failure summary, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.

@@ -43,6 +43,7 @@ def main() -> int:
             assert config.status_code == 200, config.text
             payload = config.json()
             assert payload["max_upload_files"] == 8
+            assert payload["max_upload_bytes"] == 20 * 1024 * 1024
 
             pipelines = client.get("/api/pipelines")
             assert pipelines.status_code == 200, pipelines.text

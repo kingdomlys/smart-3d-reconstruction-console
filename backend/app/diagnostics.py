@@ -90,6 +90,7 @@ def get_pipeline_diagnostics() -> dict[str, Any]:
         "tasks_root": str(SETTINGS.tasks_root),
         "limits": {
             "max_upload_files": SETTINGS.max_upload_files,
+            "max_upload_bytes": SETTINGS.max_upload_bytes,
             "max_image_pixels": SETTINGS.max_image_pixels,
             "max_image_long_edge": SETTINGS.max_image_long_edge,
         },

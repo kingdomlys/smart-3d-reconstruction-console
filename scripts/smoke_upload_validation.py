@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -44,6 +45,16 @@ def main() -> int:
 
     expect_error("oversize", [InMemoryUpload("too_large.png", (1921, 1080))])
     expect_error("too_many", [InMemoryUpload(f"image_{i}.png", (64, 64)) for i in range(9)])
+
+    import backend.app.storage as storage_module
+
+    original_settings = storage_module.SETTINGS
+    storage_module.SETTINGS = replace(original_settings, max_upload_bytes=16)
+    try:
+        expect_error("too_large_bytes", [InMemoryUpload("too_large_bytes.png", (64, 64))])
+    finally:
+        storage_module.SETTINGS = original_settings
+
     print("upload validation smoke test passed")
     return 0
 

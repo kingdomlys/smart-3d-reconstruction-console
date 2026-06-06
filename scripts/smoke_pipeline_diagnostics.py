@@ -35,6 +35,7 @@ def main() -> int:
         assert "COLMAP_CMD" in items["colmap"]["configured_env"]
         assert "secret-colmap-command" not in str(payload)
         assert payload["limits"]["max_upload_files"] == 8
+        assert payload["limits"]["max_upload_bytes"] == 20 * 1024 * 1024
 
     print("pipeline diagnostics smoke test passed")
     return 0
