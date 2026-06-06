@@ -52,6 +52,15 @@ Verified smoke command:
 conda run -n tripo_env python scripts/smoke_triposr_real.py
 ```
 
+Verified control-plane smoke command:
+
+```
+$env:TRIPOSR_PY="E:/conda/workspace/envs/tripo_env/python.exe"
+.\.venv\Scripts\python.exe scripts\smoke_triposr_control_plane_real.py
+```
+
+This runs the FastAPI control-plane queue in the backend environment while executing real TripoSR inference in `tripo_env` through `TRIPOSR_PY`. It verifies that a task reaches `Completed` and writes a non-empty `output.glb` through the same worker path used by the app.
+
 ## 2) COLMAP
 
 Required:
@@ -138,3 +147,13 @@ The shared worker entry point is:
 ```
 python backend/workers/run_pipeline.py --pipeline triposr --task-id demo --input-dir ... --interim-dir ... --output-dir ... --logs-path ...
 ```
+
+## 7) Environment audit
+
+Use this local audit before running real pipeline tests:
+
+```
+.\.venv\Scripts\python.exe scripts/audit_pipeline_env.py
+```
+
+The audit reports TripoSR, COLMAP, and 3DGS environment status. TripoSR is expected to have CUDA-capable PyTorch. COLMAP and 3DGS may need additional platform-specific dependency work before their real smoke tests can pass.

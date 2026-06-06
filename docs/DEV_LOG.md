@@ -39,3 +39,7 @@
 - Added configurable per-file upload size limit through `MAX_UPLOAD_BYTES`, exposed it in config/diagnostics responses, and surfaced it in the frontend System panel and upload error messages.
 - Added upload validation smoke coverage for byte-size rejection.
 - Verification: backend API, upload validation, pipeline diagnostics, command split, task failure summary, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.
+- Verified TripoSR real CUDA inference in `tripo_env` and added a control-plane real smoke that runs the FastAPI queue path while delegating inference to `TRIPOSR_PY`.
+- Added pipeline environment audit script for TripoSR, COLMAP, and 3DGS readiness checks.
+- Environment audit result: TripoSR CUDA runtime is OK on RTX 4060 Laptop; COLMAP conda executable currently exits with `3221225781`; `gs_env` currently lacks Torch/3DGS CUDA extensions.
+- Verification: TripoSR real smoke, TripoSR control-plane real smoke, pipeline environment audit, backend smoke checks, and frontend `npm run build` passed where applicable.
