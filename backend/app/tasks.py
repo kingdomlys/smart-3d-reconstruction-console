@@ -146,10 +146,12 @@ def _task_pipeline_id(task: dict) -> str:
 
 
 def _task_output_payload(task_id: str, output_path: Path) -> dict:
+    task = get_task(task_id) or {}
     outputs = list_output_files(task_id)
     output_types = sorted({item["type"] for item in outputs})
     return {
         "status": "Completed",
+        "pipeline_id": task.get("pipeline_id"),
         "output_path": str(output_path),
         "outputs": outputs,
         "output_types": output_types,
@@ -308,13 +310,19 @@ async def task_worker() -> None:
                 continue
             logger.info("Task started", extra={"task_id": task_id})
             _append_log(task_id, "Task started")
-            update_task(task_id, status="Running")
-            await TASK_QUEUE.broadcast(task_id, {"status": "Running"})
-
             selected_pipeline = _task_pipeline_id(task)
+            update_task(task_id, status="Running")
+            await TASK_QUEUE.broadcast(task_id, {"status": "Running", "pipeline_id": selected_pipeline})
+
             if selected_pipeline == "triposr":
                 await TASK_QUEUE.broadcast(
-                    task_id, {"status": "Running", "step": "TripoSR", "progress": 0.1}
+                    task_id,
+                    {
+                        "status": "Running",
+                        "pipeline_id": selected_pipeline,
+                        "step": "TripoSR",
+                        "progress": 0.1,
+                    },
                 )
 
                 async def on_event(payload: dict) -> None:
@@ -332,12 +340,24 @@ async def task_worker() -> None:
 
                 if selected_pipeline == "vggt":
                     await TASK_QUEUE.broadcast(
-                        task_id, {"status": "Running", "step": "VGGT", "progress": 0.1}
+                        task_id,
+                        {
+                            "status": "Running",
+                            "pipeline_id": selected_pipeline,
+                            "step": "VGGT",
+                            "progress": 0.1,
+                        },
                     )
                     output_path = await _run_vggt_worker(task_id, task["mode"], on_event)
                 elif selected_pipeline == "colmap":
                     await TASK_QUEUE.broadcast(
-                        task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
+                        task_id,
+                        {
+                            "status": "Running",
+                            "pipeline_id": selected_pipeline,
+                            "step": "COLMAP",
+                            "progress": 0.1,
+                        },
                     )
                     await _run_colmap_worker(task_id, task["mode"], on_event)
                     output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "colmap" / "summary.json"

@@ -27,8 +27,9 @@ def main() -> int:
         storage_module.SETTINGS = settings_module.Settings.from_env()
 
         db.init_db()
-        task = db.create_task("smoke-observe", mode="fast", image_count=1)
+        task = db.create_task("smoke-observe", mode="fast", image_count=1, pipeline_id="triposr")
         assert task["status"] == "Pending"
+        assert task["pipeline_id"] == "triposr"
 
         task_dir = task_root / "smoke-observe"
         outputs_dir = task_dir / "outputs"

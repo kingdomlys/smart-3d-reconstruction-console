@@ -100,6 +100,9 @@ def get_pipeline_diagnostics() -> dict[str, Any]:
     return {
         "items": items,
         "tasks_root": str(SETTINGS.tasks_root),
+        "features": {
+            "explicit_pipeline_selection": True,
+        },
         "limits": {
             "max_upload_files": SETTINGS.max_upload_files,
             "max_upload_bytes": SETTINGS.max_upload_bytes,

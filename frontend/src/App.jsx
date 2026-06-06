@@ -79,6 +79,7 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [pipelineDiagnostics, setPipelineDiagnostics] = useState(null);
   const [selectedPipeline, setSelectedPipeline] = useState("");
+  const [submittedPipeline, setSubmittedPipeline] = useState("");
 
   const wsBase = useMemo(() => toWebSocketUrl(apiBase), [apiBase]);
   const availablePipelines = useMemo(
@@ -89,7 +90,9 @@ export default function App() {
     [pipelineDiagnostics, files.length]
   );
   const selectedTask = tasks.find((task) => task.id === taskId);
-  const activePipelineId = selectedTask ? selectedTask.pipeline_id : selectedPipeline;
+  const activePipelineId = selectedTask ? selectedTask.pipeline_id : submittedPipeline || selectedPipeline;
+  const supportsExplicitPipelineSelection =
+    pipelineDiagnostics?.features?.explicit_pipeline_selection === true;
   const canRetry =
     taskId && selectedTask && !["Pending", "Running"].includes(selectedTask.status);
   const canCancel =
@@ -99,8 +102,12 @@ export default function App() {
     if (!taskId) {
       return undefined;
     }
+    let active = true;
     const socket = new WebSocket(`${wsBase}/ws/tasks/${taskId}`);
     socket.onmessage = (message) => {
+      if (!active) {
+        return;
+      }
       try {
         const payload = JSON.parse(message.data);
         setEvent(payload);
@@ -123,7 +130,10 @@ export default function App() {
         console.error(err);
       }
     };
-    return () => socket.close();
+    return () => {
+      active = false;
+      socket.close();
+    };
   }, [taskId, wsBase, apiBase]);
 
   useEffect(() => {
@@ -271,11 +281,36 @@ export default function App() {
       setStatus("No files selected");
       return;
     }
+    if (!pipelineDiagnostics) {
+      setStatus("Loading pipeline diagnostics");
+      setError("Pipeline diagnostics are still loading. Retry after the system panel is available.");
+      return;
+    }
+    if (!supportsExplicitPipelineSelection) {
+      setStatus("Backend restart required");
+      setError("The running backend does not support explicit pipeline selection. Restart the backend server and refresh this page.");
+      return;
+    }
+    const requestedPipeline = selectedPipeline || defaultPipelineId(files.length, availablePipelines);
+    if (!requestedPipeline) {
+      setStatus("No compatible pipeline");
+      setError("No compatible pipeline is available for the selected images.");
+      return;
+    }
     setStatus("Uploading");
+    setTaskId("");
+    setEvent(null);
+    setOutputUrl("");
+    setOutputPath("");
+    setPreviewOutput(null);
+    setOutputs([]);
+    setLogs("");
+    setError("");
+    setSubmittedPipeline(requestedPipeline);
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
-    if (selectedPipeline) {
-      formData.append("pipeline", selectedPipeline);
+    if (requestedPipeline) {
+      formData.append("pipeline", requestedPipeline);
     }
 
     const response = await fetch(`${apiBase}/api/tasks`, {
@@ -292,14 +327,23 @@ export default function App() {
     }
 
     const payload = await response.json();
+    if (requestedPipeline && payload.pipeline_id !== requestedPipeline) {
+      if (payload.id) {
+        fetch(`${apiBase}/api/tasks/${payload.id}/cancel`, { method: "POST" }).catch(() => {});
+      }
+      setStatus("Pipeline mismatch");
+      setTaskId(payload.id || "");
+      setError(
+        `Requested ${PIPELINE_LABELS[requestedPipeline] || requestedPipeline}, but backend queued ${
+          payload.pipeline_id ? PIPELINE_LABELS[payload.pipeline_id] || payload.pipeline_id : "no pipeline"
+        }. Restart the backend/frontend dev servers and retry.`
+      );
+      await loadTasks();
+      return;
+    }
     setTaskId(payload.id);
     setStatus(payload.status || "Queued");
-    setOutputUrl("");
-    setOutputPath("");
-    setPreviewOutput(null);
-    setOutputs([]);
-    setLogs("");
-    setError("");
+    setSubmittedPipeline(payload.pipeline_id || requestedPipeline);
     loadTasks();
   }
 
@@ -355,6 +399,9 @@ export default function App() {
           <div className="meta">
             <p>Task ID: {taskId || "-"}</p>
             <p>Pipeline: {activePipelineId ? PIPELINE_LABELS[activePipelineId] || activePipelineId : "-"}</p>
+            {pipelineDiagnostics && !supportsExplicitPipelineSelection && (
+              <p className="error">Backend restart required for pipeline selection.</p>
+            )}
             <p>Output: {outputPath || "-"}</p>
             {error && <p className="error">Error: {error}</p>}
           </div>

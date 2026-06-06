@@ -40,6 +40,7 @@ def main() -> int:
         assert items["colmap"]["support"] == "multiple images"
         assert "secret-vggt-python" not in str(payload)
         assert "secret-colmap-bin" not in str(payload)
+        assert payload["features"]["explicit_pipeline_selection"] is True
         assert payload["limits"]["max_upload_files"] == 16
         assert payload["limits"]["max_upload_bytes"] == 20 * 1024 * 1024
 

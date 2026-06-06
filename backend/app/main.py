@@ -105,7 +105,7 @@ async def create_task_endpoint(
     except UploadValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
 
-    pipeline_id = _select_task_pipeline(len(files), pipeline)
+    pipeline_id = _select_task_pipeline(len(files), mode, pipeline)
 
     task_id = str(uuid4())
     dirs = ensure_task_dirs(task_id)
@@ -118,7 +118,7 @@ async def create_task_endpoint(
     return task
 
 
-def _select_task_pipeline(image_count: int, pipeline_id: str | None) -> str:
+def _select_task_pipeline(image_count: int, mode: str, pipeline_id: str | None) -> str:
     selected = (pipeline_id or ("triposr" if image_count == 1 else "vggt")).strip().lower()
     try:
         pipeline = get_pipeline(selected)
@@ -127,7 +127,7 @@ def _select_task_pipeline(image_count: int, pipeline_id: str | None) -> str:
             status_code=400,
             detail={"error": "Invalid pipeline", "pipeline": selected},
         ) from exc
-    if not pipeline.supports(image_count=image_count, mode="fast"):
+    if not pipeline.supports(image_count=image_count, mode=mode):
         raise HTTPException(
             status_code=400,
             detail={
