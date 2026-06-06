@@ -71,7 +71,7 @@ export default function App() {
         if (payload.error) {
           setError(payload.error);
         }
-        if (payload.status === "Completed") {
+        if (["Completed", "Failed", "Canceled", "Interrupted"].includes(payload.status)) {
           refreshTaskDetails(taskId);
         }
       } catch (err) {

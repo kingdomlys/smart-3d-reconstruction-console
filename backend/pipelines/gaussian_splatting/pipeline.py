@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 
 from backend.pipelines.base import PipelineResult
+from backend.pipelines.commands import split_command
 from backend.pipelines.context import PipelineContext
 
 
@@ -23,7 +23,7 @@ class GaussianSplattingPipeline:
 
         context.emit({"status": "Running", "step": "3dgs", "progress": 0.8})
         if cmd:
-            args = shlex.split(cmd) + [
+            args = split_command(cmd) + [
                 "--interim-dir",
                 str(context.interim_dir),
                 "--output-dir",

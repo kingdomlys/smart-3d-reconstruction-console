@@ -73,6 +73,40 @@ class TaskCanceled(RuntimeError):
     pass
 
 
+class PipelineProcessError(RuntimeError):
+    def __init__(self, pipeline_id: str, return_code: int, summary: str) -> None:
+        self.pipeline_id = pipeline_id
+        self.return_code = return_code
+        self.summary = summary
+        super().__init__(summary)
+
+
+class StreamTail:
+    def __init__(self, max_lines: int = 12) -> None:
+        self.max_lines = max_lines
+        self.lines: list[str] = []
+
+    def add(self, label: str, text: str) -> None:
+        if not text:
+            return
+        self.lines.append(f"[{label}] {text}")
+        if len(self.lines) > self.max_lines:
+            self.lines = self.lines[-self.max_lines :]
+
+    def summary(self, max_chars: int = 1800) -> str:
+        text = "\n".join(self.lines).strip()
+        if len(text) <= max_chars:
+            return text
+        return "[truncated]\n" + text[-max_chars:]
+
+
+def _error_summary(message: str, max_chars: int = 1800) -> str:
+    text = " ".join(message.split()) if "\n" not in message else message.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 15].rstrip() + "... [truncated]"
+
+
 def _raise_if_canceled(task_id: str) -> None:
     task = get_task(task_id)
     if TASK_QUEUE.is_cancel_requested(task_id) or (task and task["status"] == "Canceled"):
@@ -128,6 +162,7 @@ async def _read_stream(
     stream: asyncio.StreamReader,
     task_id: str,
     label: str,
+    tail: StreamTail,
     on_event: callable | None = None,
     parse_json: bool = False,
 ) -> None:
@@ -136,6 +171,7 @@ async def _read_stream(
         if not line:
             break
         text = line.decode(errors="replace").rstrip()
+        tail.add(label, text)
         _append_log(task_id, f"[{label}] {text}")
         if parse_json and on_event:
             try:
@@ -182,11 +218,12 @@ async def _run_pipeline_worker(
         stderr=asyncio.subprocess.PIPE,
     )
     assert process.stdout and process.stderr
+    stream_tail = StreamTail()
     TASK_QUEUE.set_running_process(task_id, process)
     try:
         await asyncio.gather(
-            _read_stream(process.stdout, task_id, f"{pipeline_id}:stdout", on_event, True),
-            _read_stream(process.stderr, task_id, f"{pipeline_id}:stderr"),
+            _read_stream(process.stdout, task_id, f"{pipeline_id}:stdout", stream_tail, on_event, True),
+            _read_stream(process.stderr, task_id, f"{pipeline_id}:stderr", stream_tail),
         )
         return_code = await process.wait()
     finally:
@@ -194,7 +231,11 @@ async def _run_pipeline_worker(
     if TASK_QUEUE.is_cancel_requested(task_id):
         raise TaskCanceled("Task canceled by user")
     if return_code != 0:
-        raise RuntimeError(f"{pipeline_id} pipeline failed")
+        details = stream_tail.summary()
+        message = f"{pipeline_id} pipeline failed with exit code {return_code}"
+        if details:
+            message = f"{message}\n{details}"
+        raise PipelineProcessError(pipeline_id, return_code, _error_summary(message))
 
 
 async def _run_tripo_worker(task_id: str, mode: str, on_event: callable) -> Path:
@@ -285,9 +326,11 @@ async def task_worker() -> None:
             _append_log(task_id, f"Task canceled: {exc}")
             logger.info("Task canceled", extra={"task_id": task_id})
         except Exception as exc:
-            update_task(task_id, status="Failed", error=str(exc))
-            await TASK_QUEUE.broadcast(task_id, {"status": "Failed", "error": str(exc)})
-            _append_log(task_id, f"Task failed: {exc}")
+            error = _error_summary(str(exc))
+            update_task(task_id, status="Failed", error=error)
+            updated = get_task(task_id) or {"status": "Failed", "error": error}
+            await TASK_QUEUE.broadcast(task_id, updated)
+            _append_log(task_id, f"Task failed: {error}")
             logger.exception("Task failed", extra={"task_id": task_id})
         finally:
             TASK_QUEUE.clear_cancel(task_id)

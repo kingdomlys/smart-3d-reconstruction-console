@@ -32,3 +32,7 @@
 - Added pipeline diagnostics API and frontend System panel for task root, upload limits, pipeline readiness, configured environment variables, output types, and dependency paths.
 - Added diagnostics smoke coverage to verify pipeline registration and avoid leaking environment variable values.
 - Verification: backend API, pipeline diagnostics, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.
+- Added subprocess failure summaries that carry exit code plus stdout/stderr tail into task errors and WebSocket updates for faster real-pipeline debugging.
+- Fixed pipeline command splitting for quoted Windows paths used by `TRIPOSR_CMD`, `COLMAP_CMD`, and `DGS_CMD`.
+- Added smoke coverage for command splitting and pipeline failure summaries.
+- Verification: backend API, command split, task failure summary, pipeline diagnostics, upload validation, pipeline registry, worker entry, task observability, output asset, task cancel smoke checks, and frontend `npm run build` passed.

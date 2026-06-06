@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 
 from backend.pipelines.base import PipelineResult
+from backend.pipelines.commands import split_command
 from backend.pipelines.context import PipelineContext
 
 
@@ -25,7 +25,7 @@ class ColmapPipeline:
         cmd = os.getenv("COLMAP_CMD")
         context.emit({"status": "Running", "step": "colmap", "progress": 0.2})
         if cmd:
-            args = shlex.split(cmd) + [
+            args = split_command(cmd) + [
                 "--input-dir",
                 str(context.inputs_dir),
                 "--output-dir",

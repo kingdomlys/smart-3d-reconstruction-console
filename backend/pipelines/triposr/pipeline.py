@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from backend.pipelines.base import PipelineResult
+from backend.pipelines.commands import split_command
 from backend.pipelines.context import PipelineContext
 
 SUPPORTED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
@@ -84,7 +85,7 @@ class TripoSRPipeline:
             return None
 
         context.emit({"status": "Running", "step": "tripo", "progress": 0.5, "cmd": cmd})
-        args = shlex.split(cmd) + [str(input_path), str(output_path)]
+        args = split_command(cmd) + [str(input_path), str(output_path)]
         result = subprocess.run(args, capture_output=True, text=True, check=False)
         if result.stdout:
             context.emit({"status": "Running", "step": "tripo", "progress": 0.6, "stdout": result.stdout})
