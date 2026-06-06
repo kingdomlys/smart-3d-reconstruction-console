@@ -13,12 +13,13 @@ from backend.pipelines.context import PipelineContext
 
 TEXT_MODEL_FILES = ("cameras.txt", "images.txt", "points3D.txt")
 RAW_MODEL_FILES = ("cameras.bin", "images.bin", "points3D.bin")
+SPARSE_PLY_NAME = "sparse.ply"
 
 
 class ColmapPipeline:
     id = "colmap"
     name = "COLMAP"
-    output_types = ["colmap_sparse", "db", "json", "txt", "bin"]
+    output_types = ["ply", "colmap_sparse", "db", "json", "txt", "bin"]
 
     def supports(self, image_count: int, mode: str) -> bool:
         return image_count > 1
@@ -27,6 +28,7 @@ class ColmapPipeline:
         workspace = context.interim_dir / "colmap"
         sparse_dir = workspace / "sparse"
         sparse_text_dir = workspace / "sparse_txt"
+        sparse_ply_path = workspace / SPARSE_PLY_NAME
         summary_path = workspace / "summary.json"
         if not context.inputs_dir.exists():
             raise FileNotFoundError(f"Input dir not found: {context.inputs_dir}")
@@ -51,13 +53,20 @@ class ColmapPipeline:
             failure = _classify_failure(details)
             raise RuntimeError(f"COLMAP {failure}: {_failure_hint(failure)}\n{_tail(details)}")
 
-        self._validate_outputs(workspace, sparse_dir, sparse_text_dir, summary_path)
-        outputs = self._copy_outputs(context.outputs_dir, workspace, sparse_dir, sparse_text_dir, summary_path)
+        self._validate_outputs(workspace, sparse_dir, sparse_text_dir, sparse_ply_path, summary_path)
+        outputs = self._copy_outputs(
+            context.outputs_dir,
+            workspace,
+            sparse_dir,
+            sparse_text_dir,
+            sparse_ply_path,
+            summary_path,
+        )
 
         context.emit({"status": "Running", "step": "colmap", "progress": 0.6})
-        context.emit({"status": "Completed", "output": str(summary_path)})
+        context.emit({"status": "Completed", "output": str(outputs["ply"])})
         return PipelineResult(
-            primary_output_path=outputs["json"],
+            primary_output_path=outputs["ply"],
             output_types=self.output_types,
             outputs=outputs,
             metadata=json.loads(summary_path.read_text(encoding="utf-8")),
@@ -75,6 +84,7 @@ class ColmapPipeline:
         workspace: Path,
         sparse_dir: Path,
         sparse_text_dir: Path,
+        sparse_ply_path: Path,
         summary_path: Path,
     ) -> None:
         if not (workspace / "database.db").exists():
@@ -84,6 +94,8 @@ class ColmapPipeline:
         missing_text = [name for name in TEXT_MODEL_FILES if not (sparse_text_dir / name).exists()]
         if missing_text:
             raise RuntimeError(f"COLMAP sparse text output missing: {', '.join(missing_text)}")
+        if not sparse_ply_path.exists() or sparse_ply_path.stat().st_size == 0:
+            raise RuntimeError("COLMAP did not produce sparse.ply")
         if not summary_path.exists():
             raise RuntimeError("COLMAP did not produce summary.json")
 
@@ -93,6 +105,7 @@ class ColmapPipeline:
         workspace: Path,
         sparse_dir: Path,
         sparse_text_dir: Path,
+        sparse_ply_path: Path,
         summary_path: Path,
     ) -> dict[str, Path]:
         target_root = outputs_dir / "colmap"
@@ -104,8 +117,11 @@ class ColmapPipeline:
         outputs: dict[str, Path] = {}
         summary_target = target_root / "summary.json"
         database_target = target_root / "database.db"
+        sparse_ply_target = target_root / SPARSE_PLY_NAME
         shutil.copy2(summary_path, summary_target)
         shutil.copy2(workspace / "database.db", database_target)
+        shutil.copy2(sparse_ply_path, sparse_ply_target)
+        outputs["ply"] = sparse_ply_target
         outputs["json"] = summary_target
         outputs["db"] = database_target
 

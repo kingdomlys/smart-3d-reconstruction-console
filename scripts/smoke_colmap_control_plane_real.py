@@ -73,12 +73,16 @@ async def main_async() -> None:
             assert task and task["status"] == "Completed", task
             output_path = Path(task["output_path"])
             assert output_path.exists(), output_path
-            summary = json.loads(output_path.read_text(encoding="utf-8"))
+            assert output_path.name == "sparse.ply", output_path
+            summary_path = output_path.parent / "summary.json"
+            assert summary_path.exists(), summary_path
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
             assert summary["registered_image_count"] >= 2, summary
             assert summary["point_count"] > 0, summary
 
             outputs = storage_module.list_output_files(task_id)
             relative_paths = {item["relative_path"] for item in outputs}
+            assert "colmap/sparse.ply" in relative_paths, outputs
             assert "colmap/summary.json" in relative_paths, outputs
             assert "colmap/database.db" in relative_paths, outputs
             assert "colmap/sparse_txt/cameras.txt" in relative_paths, outputs

@@ -268,10 +268,10 @@ async def _run_colmap_worker(task_id: str, mode: str, on_event: callable) -> Pat
     _raise_if_canceled(task_id)
     await _run_pipeline_worker(task_id, "colmap", mode, on_event)
     _raise_if_canceled(task_id)
-    sparse_dir = Path(ensure_task_dirs(task_id)["interim_dir"]) / "colmap" / "sparse"
-    if not sparse_dir.exists():
-        raise RuntimeError("COLMAP pipeline did not produce sparse output")
-    return sparse_dir
+    output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "colmap" / "sparse.ply"
+    if not output_path.exists():
+        raise RuntimeError("COLMAP pipeline did not produce colmap/sparse.ply")
+    return output_path
 
 
 async def _run_3dgs_worker(task_id: str, mode: str, on_event: callable) -> Path:
@@ -359,10 +359,9 @@ async def task_worker() -> None:
                             "progress": 0.1,
                         },
                     )
-                    await _run_colmap_worker(task_id, task["mode"], on_event)
-                    output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "colmap" / "summary.json"
+                    output_path = await _run_colmap_worker(task_id, task["mode"], on_event)
                     if not output_path.exists():
-                        raise RuntimeError("COLMAP pipeline did not produce colmap/summary.json")
+                        raise RuntimeError("COLMAP pipeline did not produce a previewable PLY")
                 else:
                     raise ValueError(f"Unsupported pipeline: {selected_pipeline}")
                 _raise_if_canceled(task_id)

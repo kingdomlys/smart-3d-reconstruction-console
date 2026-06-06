@@ -125,12 +125,15 @@ COLMAP_BIN=E:/vscode/workspace/colmap/colmap-x64-windows-cuda/bin/colmap.exe
 
 The pipeline runs feature extraction, exhaustive matching, sparse mapping, and text model conversion. It writes the working artifacts under `data/tasks/{id}/interim/colmap` and exposes these outputs for download:
 
+- `colmap/sparse.ply`
 - `colmap/database.db`
 - `colmap/summary.json`
 - `colmap/sparse_txt/cameras.txt`
 - `colmap/sparse_txt/images.txt`
 - `colmap/sparse_txt/points3D.txt`
 - raw sparse `.bin` model files under `colmap/sparse`
+
+`colmap/sparse.ply` is the previewable sparse point cloud exported from the mapper output and is used as the primary task output. Dense outputs such as `dense/0/fused.ply` require COLMAP undistortion, stereo matching, stereo fusion, and optional meshing; those steps are not part of the default `COLMAP Sparse` route yet.
 
 COLMAP requires images from the same static scene or object with enough overlap, stable lighting, visible texture, and moderate viewpoint changes. If images are unrelated, too sparse, blurred, reflective, mostly background, or taken from very large viewpoint jumps, sparse reconstruction can fail with `no_initial_pair` or `bad_initial_pair`. In that case, COLMAP ran correctly but could not initialize geometry from the inputs.
 

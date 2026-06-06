@@ -37,12 +37,16 @@ async def main_async() -> None:
         async def fake_run_colmap(task_id: str, mode: str, on_event: callable) -> Path:
             await on_event({"status": "Running", "step": "colmap-fake", "progress": 0.5})
             dirs = storage_module.ensure_task_dirs(task_id)
+            output_root = Path(dirs["outputs_dir"]) / "colmap"
+            output_root.mkdir(parents=True, exist_ok=True)
+            output_path = output_root / "sparse.ply"
+            output_path.write_text("ply", encoding="utf-8")
+            summary_path = output_root / "summary.json"
+            summary_path.write_text("{}", encoding="utf-8")
             sparse_dir = Path(dirs["interim_dir"]) / "colmap" / "sparse"
-            sparse_dir.mkdir(parents=True, exist_ok=True)
-            output_path = Path(dirs["outputs_dir"]) / "colmap" / "summary.json"
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text("{}", encoding="utf-8")
-            return sparse_dir
+            sparse_dir.mkdir(parents=True, exist_ok=True)
+            return output_path
 
         original_vggt = tasks_module._run_vggt_worker
         original_colmap = tasks_module._run_colmap_worker
@@ -69,7 +73,7 @@ async def main_async() -> None:
             colmap_task = db.get_task("smoke-colmap-route")
             assert colmap_task and colmap_task["status"] == "Completed", colmap_task
             assert colmap_task["pipeline_id"] == "colmap", colmap_task
-            assert colmap_task["output_path"].endswith("summary.json"), colmap_task
+            assert colmap_task["output_path"].endswith("sparse.ply"), colmap_task
         finally:
             tasks_module._run_vggt_worker = original_vggt
             tasks_module._run_colmap_worker = original_colmap

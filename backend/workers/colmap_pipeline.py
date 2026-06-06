@@ -11,6 +11,7 @@ from pathlib import Path
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 TEXT_MODEL_FILES = ("cameras.txt", "images.txt", "points3D.txt")
 RAW_MODEL_FILES = ("cameras.bin", "images.bin", "points3D.bin")
+SPARSE_PLY_NAME = "sparse.ply"
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,6 +113,7 @@ def _write_summary(
     database_path: Path,
     sparse_model_dir: Path,
     sparse_text_dir: Path,
+    sparse_ply_path: Path,
 ) -> dict[str, object]:
     cameras_txt = sparse_text_dir / "cameras.txt"
     images_txt = sparse_text_dir / "images.txt"
@@ -122,6 +124,7 @@ def _write_summary(
         "database_path": str(database_path),
         "sparse_model_path": str(sparse_model_dir),
         "sparse_text_path": str(sparse_text_dir),
+        "sparse_ply_path": str(sparse_ply_path),
         "camera_count": _count_text_rows(cameras_txt),
         "registered_image_count": _registered_image_count(images_txt),
         "point_count": _count_text_rows(points_txt),
@@ -215,12 +218,25 @@ def main() -> int:
         "--output_type",
         "TXT",
     ], "model_conversion", env)
+    sparse_ply_path = workspace / SPARSE_PLY_NAME
+    _run([
+        colmap,
+        "model_converter",
+        "--input_path",
+        str(sparse_model_dir),
+        "--output_path",
+        str(sparse_ply_path),
+        "--output_type",
+        "PLY",
+    ], "ply_export", env)
 
     missing_text = [name for name in TEXT_MODEL_FILES if not (sparse_txt_dir / name).exists()]
     if missing_text:
         raise RuntimeError(f"missing_sparse_text: {', '.join(missing_text)}")
+    if not sparse_ply_path.exists() or sparse_ply_path.stat().st_size == 0:
+        raise RuntimeError("missing_sparse_ply: COLMAP did not export sparse.ply")
 
-    summary = _write_summary(summary_path, input_dir, db_path, sparse_model_dir, sparse_txt_dir)
+    summary = _write_summary(summary_path, input_dir, db_path, sparse_model_dir, sparse_txt_dir, sparse_ply_path)
     if summary["registered_image_count"] < 2:
         raise RuntimeError("insufficient_reconstruction: fewer than two images were registered")
 
