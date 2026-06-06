@@ -26,7 +26,7 @@ PIPELINE_ENV_VARS = {
 PIPELINE_DEPENDENCIES = {
     "triposr": {"TripoSR source": BASE_DIR / "third_party" / "TripoSR"},
     "vggt": {"VGGT source": BASE_DIR.parent / "vggt"},
-    "colmap": {},
+    "colmap": {"COLMAP CUDA build": BASE_DIR.parent / "colmap" / "colmap-x64-windows-cuda"},
     "gaussian_splatting": {
         "Gaussian Splatting source": BASE_DIR / "third_party" / "gaussian-splatting"
     },

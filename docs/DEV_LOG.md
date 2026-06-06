@@ -46,3 +46,5 @@
 - Integrated VGGT as the default multi-image route while preserving the legacy COLMAP -> 3DGS route behind `MULTI_IMAGE_PIPELINE=colmap_3dgs`.
 - Added VGGT pipeline diagnostics, environment examples, output discovery for preview PNGs, a fake-route smoke, and a real control-plane smoke that delegates inference to the `vggt` conda environment.
 - Temporarily disabled COLMAP and 3DGS registration/routing so validation focuses on the implemented TripoSR and VGGT pipelines.
+- Increased the default upload and VGGT image limit to 16.
+- Re-enabled COLMAP as a real sparse reconstruction pipeline with CUDA COLMAP binary support, text model conversion, output artifact discovery, and real control-plane smoke coverage.

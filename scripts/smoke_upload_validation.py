@@ -44,7 +44,7 @@ def main() -> int:
             raise AssertionError(f"unexpected saved filename: {saved[0].name}")
 
     expect_error("oversize", [InMemoryUpload("too_large.png", (1921, 1080))])
-    expect_error("too_many", [InMemoryUpload(f"image_{i}.png", (64, 64)) for i in range(9)])
+    expect_error("too_many", [InMemoryUpload(f"image_{i}.png", (64, 64)) for i in range(17)])
 
     import backend.app.storage as storage_module
 

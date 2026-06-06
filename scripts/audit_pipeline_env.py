@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -75,15 +76,18 @@ def audit_vggt() -> dict[str, object]:
 
 
 def audit_colmap() -> dict[str, object]:
-    colmap_path = shutil.which("colmap")
-    rc, output = run_command(["conda", "run", "-n", "colmap_env", "python", "-c", "import shutil; print(shutil.which('colmap'))"])
-    path_detail = output.strip() if output.strip() else colmap_path
-    rc_help, help_output = run_command(["conda", "run", "-n", "colmap_env", "colmap", "--help"], timeout=30)
+    default_colmap = REPO_ROOT.parent / "colmap" / "colmap-x64-windows-cuda" / "bin" / "colmap.exe"
+    colmap_path = Path(os.getenv("COLMAP_BIN", str(default_colmap))).resolve()
+    if not colmap_path.exists():
+        fallback = shutil.which("colmap")
+        if fallback:
+            colmap_path = Path(fallback)
+    rc_help, help_output = run_command([str(colmap_path), "--help"], timeout=30)
     return {
         "name": "COLMAP",
         "ok": rc_help == 0,
         "return_code": rc_help,
-        "details": f"path={path_detail}\n{help_output}",
+        "details": f"path={colmap_path}\n{help_output}",
     }
 
 
@@ -112,7 +116,7 @@ def main() -> int:
         print(item["details"] or "-")
         print()
 
-    if not audits[0]["ok"] or not audits[1]["ok"]:
+    if not audits[0]["ok"] or not audits[1]["ok"] or not audits[2]["ok"]:
         return 1
     return 0
 

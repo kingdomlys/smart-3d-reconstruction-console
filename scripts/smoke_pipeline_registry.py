@@ -56,12 +56,9 @@ def main() -> int:
         if not tripo_result.primary_output_path.exists():
             raise AssertionError("TripoSR pipeline did not write output")
 
-        try:
-            get_pipeline("colmap")
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("COLMAP should be disabled until its real pipeline is implemented")
+        colmap = get_pipeline("colmap")
+        if not colmap.supports(image_count=2, mode="fast"):
+            raise AssertionError("COLMAP should support multi-image reconstruction")
 
         try:
             get_pipeline("gaussian_splatting")

@@ -326,8 +326,16 @@ async def task_worker() -> None:
                         task_id, {"status": "Running", "step": "VGGT", "progress": 0.1}
                     )
                     output_path = await _run_vggt_worker(task_id, task["mode"], on_event)
+                elif selected_multi_pipeline == "colmap":
+                    await TASK_QUEUE.broadcast(
+                        task_id, {"status": "Running", "step": "COLMAP", "progress": 0.1}
+                    )
+                    await _run_colmap_worker(task_id, task["mode"], on_event)
+                    output_path = Path(ensure_task_dirs(task_id)["outputs_dir"]) / "colmap" / "summary.json"
+                    if not output_path.exists():
+                        raise RuntimeError("COLMAP pipeline did not produce colmap/summary.json")
                 else:
-                    raise ValueError("MULTI_IMAGE_PIPELINE must be 'vggt'")
+                    raise ValueError("MULTI_IMAGE_PIPELINE must be 'vggt' or 'colmap'")
                 _raise_if_canceled(task_id)
                 update_task(task_id, status="Completed", output_path=str(output_path))
                 await TASK_QUEUE.broadcast(task_id, _task_output_payload(task_id, output_path))

@@ -1,6 +1,6 @@
 # Pipeline Setup Guide
 
-This project currently enables TripoSR and VGGT. COLMAP and 3DGS wrappers remain in the repository for follow-up development, but they are not registered in the runtime pipeline list until their real paths are stable.
+This project currently enables TripoSR, VGGT, and COLMAP. 3DGS remains in the repository for follow-up development, but it is not registered in the runtime pipeline list until its real training path is stable.
 
 ## 1) TripoSR
 
@@ -73,7 +73,7 @@ Required:
 Verified local command:
 
 ```
-conda run -n vggt python run_local_vggt_pointcloud.py --image_folder examples\kitchen\images --checkpoint model_pretrained_weight\model.pt --output_dir outputs\local_vggt_pointcloud --max_images 3 --conf_percentile 70 --source depth
+conda run -n vggt python run_local_vggt_pointcloud.py --image_folder examples\kitchen\images --checkpoint model_pretrained_weight\model.pt --output_dir outputs\local_vggt_pointcloud --max_images 16 --conf_percentile 70 --source depth
 ```
 
 Preview generation command:
@@ -89,7 +89,7 @@ MULTI_IMAGE_PIPELINE=vggt
 VGGT_PY=E:/conda/workspace/envs/vggt/python.exe
 VGGT_REPO=E:/vscode/workspace/vggt
 VGGT_CHECKPOINT=E:/vscode/workspace/vggt/model_pretrained_weight/model.pt
-VGGT_MAX_IMAGES=3
+VGGT_MAX_IMAGES=16
 VGGT_CONF_PERCENTILE=70
 VGGT_SOURCE=depth
 VGGT_PREPROCESS_MODE=crop
@@ -102,13 +102,9 @@ Control-plane real smoke command:
 .\.venv\Scripts\python.exe scripts\smoke_vggt_control_plane_real.py
 ```
 
-The smoke creates a temporary task, copies three kitchen images from the VGGT checkout, runs the same queue path used by the app, and verifies a real `.ply`, `predictions.npz`, and three preview `.png` files.
+The smoke creates a temporary task, copies sixteen kitchen images from the VGGT checkout, runs the same queue path used by the app, and verifies a real `.ply`, `predictions.npz`, and three preview `.png` files.
 
-## 3) Disabled Follow-Up Pipelines
-
-COLMAP and 3DGS are temporarily disabled in `backend/pipelines/registry.py`. They should stay hidden from `/api/pipelines` and unreachable from task routing while validating the currently implemented TripoSR and VGGT paths.
-
-### COLMAP
+## 3) COLMAP
 
 Required:
 - COLMAP installed and accessible (either on PATH or via `COLMAP_BIN`).
@@ -124,10 +120,33 @@ scripts/setup_colmap.ps1
 
 ```
 COLMAP_CMD=python backend/workers/colmap_pipeline.py
-COLMAP_BIN=colmap
+COLMAP_BIN=E:/vscode/workspace/colmap/colmap-x64-windows-cuda/bin/colmap.exe
 ```
 
-The intended pipeline creates `database.db` and outputs `cameras.txt`, `images.txt`, and `points3D.txt` under `data/tasks/{id}/interim/colmap/sparse`.
+The pipeline runs feature extraction, exhaustive matching, sparse mapping, and text model conversion. It writes the working artifacts under `data/tasks/{id}/interim/colmap` and exposes these outputs for download:
+
+- `colmap/database.db`
+- `colmap/summary.json`
+- `colmap/sparse_txt/cameras.txt`
+- `colmap/sparse_txt/images.txt`
+- `colmap/sparse_txt/points3D.txt`
+- raw sparse `.bin` model files under `colmap/sparse`
+
+Control-plane real smoke command:
+
+```
+.\.venv\Scripts\python.exe scripts\smoke_colmap_control_plane_real.py
+```
+
+To run COLMAP instead of VGGT for a multi-image task, set:
+
+```
+MULTI_IMAGE_PIPELINE=colmap
+```
+
+## 4) Disabled Follow-Up Pipeline
+
+3DGS is temporarily disabled in `backend/pipelines/registry.py`. It should stay hidden from `/api/pipelines` and unreachable from task routing while its real training path is still pending.
 
 ### 3DGS
 
@@ -153,13 +172,16 @@ The wrapper expects the training script to accept `--interim-dir`, `--output-dir
 - `point_cloud.ply`
 - `scene.splat`
 
-## 4) Multi-image route selection
+## 5) Multi-image route selection
 
 By default, multi-image uploads run VGGT and complete with `.ply`, `.npz`, and preview `.png` outputs.
 
-`MULTI_IMAGE_PIPELINE=vggt` is currently the only supported runtime value.
+Supported runtime values:
 
-## 5) Repository setup
+- `vggt`
+- `colmap`
+
+## 6) Repository setup
 
 After cloning the repository, initialize third-party dependencies:
 
@@ -167,7 +189,7 @@ After cloning the repository, initialize third-party dependencies:
 git submodule update --init --recursive
 ```
 
-## 6) Environment file
+## 7) Environment file
 
 Add these to `backend/.env` (see `backend/.env.example`).
 
@@ -175,16 +197,16 @@ Key local settings:
 
 ```
 TASKS_ROOT=./data/tasks
-MAX_UPLOAD_FILES=8
+MAX_UPLOAD_FILES=16
 MAX_IMAGE_PIXELS=2073600
 MAX_IMAGE_LONG_EDGE=1920
 ```
 
 `TASKS_ROOT` may be absolute or relative to the repository root. It controls where generated task artifacts are stored. The backend validates that this directory is writable on startup.
 
-Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. A task can upload at most 8 images, and each image must fit within the 1080p limit.
+Upload validation currently accepts `.png`, `.jpg`, `.jpeg`, and `.webp` images. A task can upload at most 16 images, and each image must fit within the 1080p limit.
 
-## 7) Pipeline extension point
+## 8) Pipeline extension point
 
 New reconstruction or inference methods should be added under `backend/pipelines/{method}/pipeline.py` and registered in `backend/pipelines/registry.py`.
 
@@ -199,7 +221,7 @@ The shared worker entry point is:
 python backend/workers/run_pipeline.py --pipeline triposr --task-id demo --input-dir ... --interim-dir ... --output-dir ... --logs-path ...
 ```
 
-## 8) Environment audit
+## 9) Environment audit
 
 Use this local audit before running real pipeline tests:
 
@@ -207,4 +229,4 @@ Use this local audit before running real pipeline tests:
 .\.venv\Scripts\python.exe scripts/audit_pipeline_env.py
 ```
 
-The audit reports TripoSR, VGGT, COLMAP, and 3DGS environment status. TripoSR and VGGT are expected to have CUDA-capable PyTorch. COLMAP and 3DGS remain useful as environment diagnostics, but they are not enabled runtime pipelines yet.
+The audit reports TripoSR, VGGT, COLMAP, and 3DGS environment status. TripoSR and VGGT are expected to have CUDA-capable PyTorch. COLMAP is expected to run from the local CUDA Windows build. 3DGS remains useful as an environment diagnostic, but it is not an enabled runtime pipeline yet.

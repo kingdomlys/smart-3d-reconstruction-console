@@ -42,7 +42,7 @@ class VggtPipeline:
         output_dir = context.interim_dir / "vggt"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        max_images = os.getenv("VGGT_MAX_IMAGES", "3")
+        max_images = os.getenv("VGGT_MAX_IMAGES", "16")
         conf_percentile = os.getenv("VGGT_CONF_PERCENTILE", "70")
         source = os.getenv("VGGT_SOURCE", "depth")
         preprocess_mode = os.getenv("VGGT_PREPROCESS_MODE", "crop")

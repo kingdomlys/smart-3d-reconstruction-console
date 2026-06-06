@@ -44,9 +44,9 @@ def assert_vggt_runtime() -> tuple[Path, Path, Path]:
 
 async def main_async() -> None:
     vggt_repo, vggt_python, checkpoint = assert_vggt_runtime()
-    source_images = sorted((vggt_repo / "examples" / "kitchen" / "images").glob("*"))[:3]
-    if len(source_images) < 3:
-        raise RuntimeError("Need at least 3 VGGT kitchen images for the real smoke")
+    source_images = sorted((vggt_repo / "examples" / "kitchen" / "images").glob("*"))[:16]
+    if len(source_images) < 16:
+        raise RuntimeError("Need at least 16 VGGT kitchen images for the real smoke")
 
     with TemporaryDirectory() as tmp:
         tmp_root = Path(tmp)
@@ -56,7 +56,7 @@ async def main_async() -> None:
         os.environ["VGGT_REPO"] = str(vggt_repo)
         os.environ["VGGT_PY"] = str(vggt_python)
         os.environ["VGGT_CHECKPOINT"] = str(checkpoint)
-        os.environ["VGGT_MAX_IMAGES"] = "3"
+        os.environ["VGGT_MAX_IMAGES"] = "16"
         os.environ["VGGT_CONF_PERCENTILE"] = "70"
         os.environ["VGGT_SOURCE"] = "depth"
         os.environ["VGGT_PREPROCESS_MODE"] = "crop"
@@ -72,7 +72,7 @@ async def main_async() -> None:
 
         db.init_db()
         task_id = "smoke-vggt-real"
-        db.create_task(task_id, mode="fast", image_count=3)
+        db.create_task(task_id, mode="fast", image_count=len(source_images))
         dirs = storage_module.ensure_task_dirs(task_id)
         for image_path in source_images:
             shutil.copyfile(image_path, Path(dirs["inputs_dir"]) / image_path.name)
